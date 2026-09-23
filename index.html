@@ -1,0 +1,1117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>ict.count</title>
+    <link
+      rel="preconnect"
+      href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #14181c;
+        --surface: #1c2229;
+        --surface-2: #2a313b;
+        --border: #3c4552;
+        --text: #f4f2ec;
+        --text-dim: #aab1bb;
+        --accent: #e3b25c;
+        --accent-dim: #a17f3c;
+        --danger: #e06a5c;
+        --ok: #8fc189;
+        box-sizing: border-box;
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+      @media (prefers-color-scheme: light) {
+        :root:not([data-theme="dark"]) {
+          --bg: #f3f1ea;
+          --surface: #fffefb;
+          --surface-2: #eae5d6;
+          --border: #c9c1ac;
+          --text: #181c21;
+          --text-dim: #52585f;
+          --accent: #8f6222;
+          --accent-dim: #c99a4d;
+        }
+      }
+      :root[data-theme="dark"] {
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-padding-top: env(safe-area-inset-top, 0px);
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: "IBM Plex Sans", system-ui, sans-serif;
+        font-size: 14.5px;
+        line-height: 1.45;
+        display: flex;
+        flex-direction: column;
+        min-height: 100%;
+      }
+      .mono {
+        font-family: "IBM Plex Mono", monospace;
+      }
+      header {
+        padding: 16px 20px;
+        padding-top: calc(16px + env(safe-area-inset-top, 0px));
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+        flex-wrap: wrap;
+        background: var(--surface);
+      }
+      header h1 {
+        font-size: 17px;
+        margin: 0;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+      }
+      header .stamp {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        color: var(--accent);
+        border: 1px solid var(--accent-dim);
+        padding: 2px 7px;
+        border-radius: 3px;
+      }
+      .tabs {
+        display: flex;
+        gap: 2px;
+        margin-left: auto;
+      }
+      .tab {
+        padding: 7px 14px;
+        font-size: 13px;
+        border: 1px solid var(--border);
+        background: var(--surface-2);
+        color: var(--text-dim);
+        cursor: pointer;
+        border-radius: 4px;
+      }
+      .tab.active {
+        color: var(--text);
+        border-color: var(--accent-dim);
+        background: var(--surface);
+      }
+      .userbadge {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12.5px;
+        color: var(--text-dim);
+      }
+      .userbadge b {
+        color: var(--text);
+        font-family: "IBM Plex Mono", monospace;
+      }
+      .logoutbtn {
+        padding: 5px 11px;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        color: var(--text-dim);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .logoutbtn:hover {
+        color: var(--danger);
+        border-color: var(--danger);
+      }
+      main {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+        overflow: hidden;
+      }
+      .rail {
+        width: 230px;
+        min-width: 170px;
+        border-right: 1px solid var(--border);
+        background: var(--surface);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .rail input {
+        margin: 10px;
+        padding: 8px 10px;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 4px;
+        font-size: 13px;
+        font-family: inherit;
+      }
+      .branchlist {
+        overflow-y: auto;
+        flex: 1;
+      }
+      .branchrow {
+        padding: 10px 14px;
+        font-size: 14px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--border);
+        color: var(--text);
+      }
+      .branchrow:hover {
+        background: var(--surface-2);
+      }
+      .branchrow.active {
+        background: var(--surface-2);
+        color: var(--text);
+        border-left: 3px solid var(--accent);
+        padding-left: 11px;
+        font-weight: 600;
+      }
+      .branchrow .cnt {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 12px;
+        color: var(--text-dim);
+        min-width: 20px;
+        text-align: right;
+      }
+      .branchrow {
+        align-items: center;
+      }
+      .branchrow .bname {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        padding-right: 6px;
+      }
+      .branchrow .rowbtns {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+      }
+      .editbtn {
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        cursor: pointer;
+        font-size: 13px;
+        padding: 3px;
+        border-radius: 3px;
+      }
+      .editbtn:hover {
+        color: var(--accent);
+        background: var(--border);
+      }
+      .delbtn {
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        cursor: pointer;
+        font-size: 13px;
+        padding: 3px;
+        border-radius: 3px;
+      }
+      .delbtn:hover {
+        color: var(--danger);
+        background: var(--border);
+      }
+      .addbranch {
+        padding: 9px 14px;
+        font-size: 13px;
+        color: var(--accent);
+        cursor: pointer;
+        border-top: 1px solid var(--border);
+      }
+      .content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 22px 26px;
+        max-width: 900px;
+      }
+      .content h2 {
+        font-size: 21px;
+        margin: 0 0 3px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .content h2 .editbtn {
+        font-size: 15px;
+      }
+      .content h2 .delbtn {
+        font-size: 15px;
+      }
+      td .editbtn {
+        font-size: 12px;
+        opacity: 0.75;
+      }
+      td .editbtn:hover {
+        opacity: 1;
+      }
+      .content .sub {
+        font-size: 13px;
+        color: var(--text-dim);
+        margin-bottom: 18px;
+      }
+      .addrow {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+      }
+      .addrow input {
+        padding: 9px 11px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 13.5px;
+      }
+      .addrow input[name="iname"] {
+        flex: 1;
+        min-width: 160px;
+      }
+      .addrow input[name="iqty"] {
+        width: 80px;
+      }
+      .addrow button,
+      .primary-btn {
+        padding: 9px 16px;
+        background: var(--accent);
+        color: #14181c;
+        border: none;
+        border-radius: 4px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 13.5px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th {
+        text-align: left;
+        font-size: 11.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-dim);
+        border-bottom: 1px solid var(--border);
+        padding: 9px 6px;
+        font-weight: 600;
+      }
+      td {
+        padding: 11px 6px;
+        border-bottom: 1px solid var(--border);
+        font-size: 14.5px;
+        color: var(--text);
+      }
+      td.qty {
+        font-family: "IBM Plex Mono", monospace;
+        text-align: right;
+        width: 70px;
+        font-weight: 600;
+      }
+      td.actions {
+        width: 80px;
+        text-align: right;
+      }
+      .qtybtn {
+        width: 24px;
+        height: 24px;
+        border: 1px solid var(--border);
+        background: var(--surface-2);
+        color: var(--text);
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 14px;
+        line-height: 1;
+        font-weight: 600;
+      }
+      .qtybtn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .del {
+        color: var(--danger);
+        cursor: pointer;
+        font-size: 12.5px;
+        background: none;
+        border: none;
+        font-family: inherit;
+        font-weight: 500;
+      }
+      .del:hover {
+        text-decoration: underline;
+      }
+      .empty {
+        color: var(--text-dim);
+        font-size: 14px;
+        padding: 30px 0;
+        text-align: center;
+      }
+      .total {
+        margin-top: 16px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+        font-size: 13.5px;
+        color: var(--text-dim);
+      }
+      .total b {
+        color: var(--accent);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 14.5px;
+      }
+      .overview-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 6px;
+        border-bottom: 1px solid var(--border);
+        font-size: 14.5px;
+      }
+      .overview-row .n {
+        font-family: "IBM Plex Mono", monospace;
+        color: var(--accent);
+      }
+      .sync {
+        font-size: 10.5px;
+        color: var(--text-dim);
+        margin-left: auto;
+        align-self: center;
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 4px;
+      }
+
+      /* audit log */
+      .audittable td,
+      .audittable th {
+        font-size: 12.5px;
+      }
+      .audittable td.ts {
+        font-family: "IBM Plex Mono", monospace;
+        color: var(--text-dim);
+        white-space: nowrap;
+      }
+      .audittable td.user {
+        font-family: "IBM Plex Mono", monospace;
+        color: var(--accent);
+        white-space: nowrap;
+      }
+      .audittable td.action {
+        white-space: nowrap;
+      }
+
+      /* login overlay */
+      #loginOverlay {
+        position: fixed;
+        inset: 0;
+        background: var(--bg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        padding: 20px;
+      }
+      .loginbox {
+        width: 100%;
+        max-width: 320px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 28px 24px;
+      }
+      .loginbox h2 {
+        margin: 0 0 4px;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .loginbox .sub {
+        font-size: 12.5px;
+        color: var(--text-dim);
+        margin-bottom: 20px;
+      }
+      .loginbox label {
+        display: block;
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-bottom: 5px;
+        margin-top: 14px;
+      }
+      .loginbox input {
+        width: 100%;
+        padding: 10px 11px;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 14px;
+      }
+      .loginbox button {
+        width: 100%;
+        margin-top: 20px;
+        padding: 10px;
+        background: var(--accent);
+        color: #14181c;
+        border: none;
+        border-radius: 4px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      .loginerr {
+        color: var(--danger);
+        font-size: 12.5px;
+        margin-top: 10px;
+        min-height: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loginOverlay">
+      <div class="loginbox">
+        <h2>ICT Inventory Count</h2>
+        <div class="sub">Sign in to continue</div>
+        <label for="loginUser">Username</label>
+        <input
+          id="loginUser"
+          autocomplete="username"
+          placeholder="Username" />
+        <label for="loginPass">Password</label>
+        <input
+          id="loginPass"
+          type="password"
+          autocomplete="current-password"
+          placeholder="Password" />
+        <button id="loginBtn">Sign in</button>
+        <div
+          class="loginerr"
+          id="loginErr"></div>
+      </div>
+    </div>
+
+    <header>
+      <h1>ICT Inventory Count</h1>
+      <span class="stamp mono">53 BRANCHES</span>
+      <div class="tabs">
+        <div
+          class="tab active"
+          id="tabBranch">
+          By Branch
+        </div>
+        <div
+          class="tab"
+          id="tabAll">
+          All Items
+        </div>
+        <div
+          class="tab"
+          id="tabAudit">
+          Audit Log
+        </div>
+      </div>
+      <div class="userbadge">
+        <span>Signed in as <b id="userLabel">—</b></span>
+        <button
+          class="logoutbtn"
+          id="logoutBtn">
+          Log out
+        </button>
+      </div>
+    </header>
+    <main>
+      <div class="rail">
+        <input
+          id="branchSearch"
+          placeholder="Search branch…" />
+        <div
+          class="branchlist"
+          id="branchList"></div>
+        <div
+          class="addbranch"
+          id="addBranch">
+          + Add branch
+        </div>
+      </div>
+      <div
+        class="content"
+        id="content"></div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script>
+      const SUPABASE_URL = "https://maflvhksxdcbgqmogfee.supabase.co"
+      const SUPABASE_ANON_KEY =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hZmx2aGtzeGRjYmdxbW9nZmVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNzE2NzEsImV4cCI6MjEwNTc0NzY3MX0.qHOiq7ezHnN1--DAtKBAwy7vS0LbArBjO7KP9PJj2ys"
+      const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+      /* ---------- auth (client-side gate; real access control lives in Supabase RLS) ---------- */
+      const AUTH_USER = "admin"
+      const AUTH_PASS = "Olympus101"
+      let currentUser = null
+
+      function checkSession() {
+        try {
+          return sessionStorage.getItem("ictInvUser")
+        } catch (e) {
+          return null
+        }
+      }
+      function setSession(u) {
+        try {
+          sessionStorage.setItem("ictInvUser", u)
+        } catch (e) {}
+      }
+      function clearSession() {
+        try {
+          sessionStorage.removeItem("ictInvUser")
+        } catch (e) {}
+      }
+
+      function showLogin() {
+        document.getElementById("loginOverlay").style.display = "flex"
+        document.getElementById("loginErr").textContent = ""
+        document.getElementById("loginUser").value = ""
+        document.getElementById("loginPass").value = ""
+        setTimeout(() => document.getElementById("loginUser").focus(), 0)
+      }
+      function hideLogin() {
+        document.getElementById("loginOverlay").style.display = "none"
+      }
+
+      async function attemptLogin() {
+        const u = document.getElementById("loginUser").value.trim()
+        const p = document.getElementById("loginPass").value
+        if (u === AUTH_USER && p === AUTH_PASS) {
+          currentUser = u
+          setSession(u)
+          hideLogin()
+          document.getElementById("userLabel").textContent = currentUser
+          await logAudit("login", `${currentUser} signed in`)
+          boot()
+        } else {
+          document.getElementById("loginErr").textContent =
+            "Incorrect username or password."
+        }
+      }
+      document.getElementById("loginBtn").onclick = attemptLogin
+      document.getElementById("loginPass").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") attemptLogin()
+      })
+      document.getElementById("loginUser").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") document.getElementById("loginPass").focus()
+      })
+      document.getElementById("logoutBtn").onclick = async () => {
+        await logAudit("logout", `${currentUser} signed out`)
+        clearSession()
+        currentUser = null
+        location.reload()
+      }
+
+      /* ---------- state ---------- */
+      let state = { branches: [] }
+      let auditCache = []
+      let selected = null
+      let view = "branch"
+
+      function escapeHtml(s) {
+        return String(s).replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[c],
+        )
+      }
+      function fmtTs(iso) {
+        try {
+          return new Date(iso).toLocaleString()
+        } catch (e) {
+          return iso
+        }
+      }
+
+      /* ---------- data layer (Supabase) ---------- */
+      function showBanner(msg) {
+        let el = document.getElementById("connBanner")
+        if (!el) {
+          el = document.createElement("div")
+          el.id = "connBanner"
+          el.style.cssText =
+            "background:var(--danger);color:#fff;font-size:12.5px;padding:8px 20px;"
+          document.body.insertBefore(
+            el,
+            document.querySelector("header").nextSibling,
+          )
+        }
+        el.textContent = msg
+        el.style.display = msg ? "block" : "none"
+      }
+
+      async function logAudit(action, details) {
+        try {
+          const { error } = await sb
+            .from("audit_log")
+            .insert({ app_user: currentUser || "unknown", action, details })
+          if (error) throw error
+        } catch (e) {
+          console.error("audit log write failed", e)
+          showBanner(
+            "Could not write to database: " + (e.message || JSON.stringify(e)),
+          )
+        }
+      }
+
+      async function refreshAudit() {
+        const { data, error } = await sb
+          .from("audit_log")
+          .select("*")
+          .order("ts", { ascending: false })
+          .limit(500)
+        if (error) {
+          console.error("audit fetch failed", error)
+          showBanner(
+            "Could not load audit log: " +
+              (error.message || JSON.stringify(error)),
+          )
+          return
+        }
+        showBanner(null)
+        auditCache = data || []
+        if (view === "audit") render()
+      }
+
+      async function loadAllData() {
+        const [{ data: branches, error: be }, { data: items, error: ie }] =
+          await Promise.all([
+            sb.from("branches").select("*").order("name"),
+            sb.from("items").select("*").order("name"),
+          ])
+        if (be || ie) {
+          const err = be || ie
+          console.error("load failed", err)
+          showBanner(
+            "Could not connect to database: " +
+              (err.message || JSON.stringify(err)),
+          )
+          return
+        }
+        showBanner(null)
+        state.branches = (branches || []).map((b) => ({
+          id: b.id,
+          name: b.name,
+          items: (items || [])
+            .filter((it) => it.branch_id === b.id)
+            .map((it) => ({ id: it.id, name: it.name, qty: it.qty })),
+        }))
+        if (!selected || !state.branches.find((b) => b.id === selected)) {
+          selected = state.branches[0] && state.branches[0].id
+        }
+        render()
+      }
+
+      /* ---------- mutations ---------- */
+      async function renameBranch(b) {
+        const name = prompt("Rename branch:", b.name)
+        if (!name || !name.trim() || name.trim() === b.name) return
+        const oldName = b.name
+        const { error } = await sb
+          .from("branches")
+          .update({ name: name.trim() })
+          .eq("id", b.id)
+        if (error) {
+          alert("Rename failed: " + error.message)
+          return
+        }
+        await logAudit(
+          "rename_branch",
+          `Renamed branch "${oldName}" to "${name.trim()}"`,
+        )
+        refreshAudit()
+        loadAllData()
+      }
+
+      async function deleteBranch(b) {
+        const itemCount = b.items.reduce((s, it) => s + Number(it.qty || 0), 0)
+        const msg =
+          itemCount > 0
+            ? `Delete branch "${b.name}"? It has ${itemCount} units logged — this cannot be undone.`
+            : `Delete branch "${b.name}"? This cannot be undone.`
+        if (!confirm(msg)) return
+        const { error } = await sb.from("branches").delete().eq("id", b.id)
+        if (error) {
+          alert("Delete failed: " + error.message)
+          return
+        }
+        await logAudit(
+          "delete_branch",
+          `Deleted branch "${b.name}" (had ${itemCount} units across ${b.items.length} item types)`,
+        )
+        refreshAudit()
+        if (selected === b.id) selected = null
+        loadAllData()
+      }
+
+      async function addBranchPrompt() {
+        const name = prompt("New branch name:")
+        if (!name) return
+        const { data, error } = await sb
+          .from("branches")
+          .insert({ name: name.trim() })
+          .select()
+          .single()
+        if (error) {
+          alert("Add branch failed: " + error.message)
+          return
+        }
+        selected = data.id
+        view = "branch"
+        setTabs()
+        await logAudit("add_branch", `Added branch "${data.name}"`)
+        refreshAudit()
+        loadAllData()
+      }
+
+      async function addItem(b, name, qty) {
+        const existing = b.items.find(
+          (x) => x.name.toLowerCase() === name.toLowerCase(),
+        )
+        if (existing) {
+          const newQty = Number(existing.qty) + qty
+          const { error } = await sb
+            .from("items")
+            .update({ qty: newQty, updated_at: new Date().toISOString() })
+            .eq("id", existing.id)
+          if (error) {
+            alert("Update failed: " + error.message)
+            return
+          }
+          await logAudit(
+            "add_item",
+            `Added ${qty} to existing "${existing.name}" in ${b.name} → now ${newQty}`,
+          )
+        } else {
+          const { error } = await sb
+            .from("items")
+            .insert({ branch_id: b.id, name, qty })
+          if (error) {
+            alert("Add item failed: " + error.message)
+            return
+          }
+          await logAudit(
+            "add_item",
+            `Added new item "${name}" (qty ${qty}) to ${b.name}`,
+          )
+        }
+        refreshAudit()
+        loadAllData()
+      }
+
+      async function editItem(b, it) {
+        const oldName = it.name,
+          oldQty = it.qty
+        const name = prompt("Rename item:", it.name)
+        const finalName = name && name.trim() ? name.trim() : it.name
+        const qty = prompt("Set quantity:", it.qty)
+        const finalQty =
+          qty !== null && !isNaN(Number(qty))
+            ? Math.max(0, Number(qty))
+            : it.qty
+        if (finalName === oldName && Number(finalQty) === Number(oldQty)) return
+        const { error } = await sb
+          .from("items")
+          .update({
+            name: finalName,
+            qty: finalQty,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", it.id)
+        if (error) {
+          alert("Update failed: " + error.message)
+          return
+        }
+        await logAudit(
+          "edit_item",
+          `Edited "${oldName}" (qty ${oldQty}) → "${finalName}" (qty ${finalQty}) in ${b.name}`,
+        )
+        refreshAudit()
+        loadAllData()
+      }
+
+      async function bumpItem(b, it, delta) {
+        const newQty = Math.max(0, Number(it.qty) + delta)
+        const { error } = await sb
+          .from("items")
+          .update({ qty: newQty, updated_at: new Date().toISOString() })
+          .eq("id", it.id)
+        if (error) {
+          alert("Update failed: " + error.message)
+          return
+        }
+        await logAudit(
+          delta > 0 ? "increment" : "decrement",
+          `${delta > 0 ? "+1" : "-1"} "${it.name}" in ${b.name} → now ${newQty}`,
+        )
+        refreshAudit()
+        loadAllData()
+      }
+
+      async function deleteItem(b, it) {
+        const { error } = await sb.from("items").delete().eq("id", it.id)
+        if (error) {
+          alert("Delete failed: " + error.message)
+          return
+        }
+        await logAudit(
+          "delete_item",
+          `Removed "${it.name}" (qty ${it.qty}) from ${b.name}`,
+        )
+        refreshAudit()
+        loadAllData()
+      }
+
+      /* ---------- render ---------- */
+      function render() {
+        renderBranchList()
+        if (view === "all") renderOverview()
+        else if (view === "audit") renderAudit()
+        else renderBranch()
+      }
+
+      function renderBranchList() {
+        const q = (
+          document.getElementById("branchSearch").value || ""
+        ).toLowerCase()
+        const list = document.getElementById("branchList")
+        list.innerHTML = ""
+        state.branches
+          .filter((b) => b.name.toLowerCase().includes(q))
+          .forEach((b) => {
+            const total = b.items.reduce((s, it) => s + Number(it.qty || 0), 0)
+            const row = document.createElement("div")
+            row.className = "branchrow" + (b.id === selected ? " active" : "")
+            row.innerHTML = `<span class="bname">${escapeHtml(b.name)}</span><span class="rowbtns"><button class="editbtn" data-a="edit" title="Rename">✎</button><button class="delbtn" data-a="delbranch" title="Delete branch">🗑</button><span class="cnt">${total}</span></span>`
+            row.querySelector(".bname").onclick = () => {
+              selected = b.id
+              view = "branch"
+              setTabs()
+              render()
+            }
+            row.querySelector("[data-a=edit]").onclick = (e) => {
+              e.stopPropagation()
+              renameBranch(b)
+            }
+            row.querySelector("[data-a=delbranch]").onclick = (e) => {
+              e.stopPropagation()
+              deleteBranch(b)
+            }
+            list.appendChild(row)
+          })
+      }
+
+      function setTabs() {
+        document
+          .getElementById("tabBranch")
+          .classList.toggle("active", view === "branch")
+        document
+          .getElementById("tabAll")
+          .classList.toggle("active", view === "all")
+        document
+          .getElementById("tabAudit")
+          .classList.toggle("active", view === "audit")
+      }
+
+      function renderBranch() {
+        const content = document.getElementById("content")
+        const b =
+          state.branches.find((x) => x.id === selected) || state.branches[0]
+        if (!b) {
+          content.innerHTML = '<div class="empty">No branches yet.</div>'
+          return
+        }
+        selected = b.id
+        const total = b.items.reduce((s, it) => s + Number(it.qty || 0), 0)
+        content.innerHTML = `
+    <h2>${escapeHtml(b.name)} <button class="editbtn" id="editBranchName" title="Rename branch">✎</button><button class="delbtn" id="deleteBranchBtn" title="Delete branch">🗑</button></h2>
+    <div class="sub">ICT inventory for this branch</div>
+    <div class="addrow">
+      <input name="iname" placeholder="Item name (e.g. Laptop)">
+      <input name="iqty" type="number" min="1" value="1" placeholder="Qty">
+      <button id="addItemBtn">Add item</button>
+    </div>
+    <table>
+      <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th></th><th></th></tr></thead>
+      <tbody id="itemsBody"></tbody>
+    </table>
+    ${b.items.length === 0 ? '<div class="empty">No items logged yet — add one above.</div>' : ""}
+    <div class="total">Total units in ${escapeHtml(b.name)}: <b>${total}</b></div>
+  `
+        document.getElementById("editBranchName").onclick = () =>
+          renameBranch(b)
+        document.getElementById("deleteBranchBtn").onclick = () =>
+          deleteBranch(b)
+        const tbody = document.getElementById("itemsBody")
+        b.items.forEach((it) => {
+          const tr = document.createElement("tr")
+          tr.innerHTML = `<td><span class="itemname">${escapeHtml(it.name)}</span> <button class="editbtn" data-a="rename" title="Rename item">✎</button></td>
+      <td class="qty">${it.qty}</td>
+      <td class="actions"><button class="qtybtn" data-a="dec">−</button> <button class="qtybtn" data-a="inc">+</button></td>
+      <td class="actions"><button class="del" data-a="del">remove</button></td>`
+          tr.querySelector("[data-a=rename]").onclick = () => editItem(b, it)
+          tr.querySelector("[data-a=inc]").onclick = () => bumpItem(b, it, 1)
+          tr.querySelector("[data-a=dec]").onclick = () => bumpItem(b, it, -1)
+          tr.querySelector("[data-a=del]").onclick = () => deleteItem(b, it)
+          tbody.appendChild(tr)
+        })
+        document.getElementById("addItemBtn").onclick = () => {
+          const nameEl = content.querySelector("input[name=iname]")
+          const qtyEl = content.querySelector("input[name=iqty]")
+          const name = nameEl.value.trim()
+          const qty = Number(qtyEl.value) || 1
+          if (!name) return
+          nameEl.value = ""
+          qtyEl.value = 1
+          nameEl.focus()
+          addItem(b, name, qty)
+        }
+      }
+
+      function renderOverview() {
+        const content = document.getElementById("content")
+        const totals = {}
+        state.branches.forEach((b) =>
+          b.items.forEach((it) => {
+            totals[it.name] = (totals[it.name] || 0) + Number(it.qty || 0)
+          }),
+        )
+        const names = Object.keys(totals).sort()
+        const grand = names.reduce((s, n) => s + totals[n], 0)
+        content.innerHTML = `
+    <h2>All Items — Company Wide</h2>
+    <div class="sub">Totals across all 53 branches</div>
+    ${
+      names.length === 0
+        ? '<div class="empty">No items logged anywhere yet.</div>'
+        : names
+            .map(
+              (n) =>
+                `<div class="overview-row"><span>${escapeHtml(n)}</span><span class="n">${totals[n]}</span></div>`,
+            )
+            .join("")
+    }
+    ${names.length ? `<div class="total">Grand total units: <b>${grand}</b></div>` : ""}
+  `
+      }
+
+      function renderAudit() {
+        const content = document.getElementById("content")
+        content.innerHTML = `
+    <h2>Audit Log</h2>
+    <div class="sub">Live activity across all branches, most recent first (last 500 kept)</div>
+    ${
+      auditCache.length === 0
+        ? '<div class="empty">No activity logged yet.</div>'
+        : `
+    <table class="audittable">
+      <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
+      <tbody>
+        ${auditCache.map((e) => `<tr><td class="ts">${escapeHtml(fmtTs(e.ts))}</td><td class="user">${escapeHtml(e.app_user)}</td><td class="action">${escapeHtml(e.action)}</td><td>${escapeHtml(e.details)}</td></tr>`).join("")}
+      </tbody>
+    </table>`
+    }
+  `
+      }
+
+      /* ---------- tabs / search / add branch ---------- */
+      document.getElementById("tabBranch").onclick = () => {
+        view = "branch"
+        setTabs()
+        render()
+      }
+      document.getElementById("tabAll").onclick = () => {
+        view = "all"
+        setTabs()
+        render()
+      }
+      document.getElementById("tabAudit").onclick = () => {
+        view = "audit"
+        setTabs()
+        render()
+      }
+      document.getElementById("branchSearch").oninput = renderBranchList
+      document.getElementById("addBranch").onclick = addBranchPrompt
+
+      /* ---------- boot ---------- */
+      let subscribed = false
+      async function boot() {
+        render()
+        await loadAllData()
+        await refreshAudit()
+        if (!subscribed) {
+          sb.channel("inventory-realtime")
+            .on(
+              "postgres_changes",
+              { event: "*", schema: "public", table: "items" },
+              loadAllData,
+            )
+            .on(
+              "postgres_changes",
+              { event: "*", schema: "public", table: "branches" },
+              loadAllData,
+            )
+            .on(
+              "postgres_changes",
+              { event: "*", schema: "public", table: "audit_log" },
+              refreshAudit,
+            )
+            .subscribe()
+          subscribed = true
+        }
+      }
+
+      function init() {
+        if (typeof supabase === "undefined") {
+          showLogin()
+          document.getElementById("loginErr").textContent =
+            "Could not load the database library (this preview sandbox may be blocking it) — try opening the downloaded file directly in a browser tab instead."
+          return
+        }
+        const existing = checkSession()
+        if (existing === AUTH_USER) {
+          currentUser = existing
+          document.getElementById("userLabel").textContent = currentUser
+          hideLogin()
+          boot()
+        } else {
+          showLogin()
+        }
+      }
+      init()
+    </script>
+  </body>
+</html>
