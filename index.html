@@ -157,6 +157,25 @@ td.actions{width:80px; text-align:right;}
   border-radius:4px; font-weight:600; cursor:pointer; font-size:14px;
 }
 .loginerr{color:var(--danger); font-size:12.5px; margin-top:10px; min-height:14px;}
+
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:90;padding:16px;}
+.modalbox{width:100%;max-width:520px;max-height:92vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:22px;}
+.modalbox h3{margin:0 0 14px;font-size:17px;}
+.modalbox .sub2{font-size:12.5px;color:var(--text-dim);font-weight:400;margin-left:6px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px;margin-bottom:10px;}
+.modalbox label{display:block;font-size:12px;color:var(--text-dim);}
+.modalbox input,.modalbox select,.modalbox textarea{width:100%;margin-top:4px;padding:9px 10px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:4px;font-family:inherit;font-size:14px;}
+.mactions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
+.ghostbtn{padding:6px 12px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer;font-size:12.5px;margin-left:8px;font-family:inherit;}
+.ghostbtn:hover{border-color:var(--accent);color:var(--accent);}
+.dangerbtn:hover{border-color:var(--danger);color:var(--danger);}
+.itemmeta{font-size:12px;color:var(--text-dim);margin-top:2px;}
+.pill{font-size:11px;padding:1px 7px;border-radius:10px;border:1px solid var(--accent-dim);color:var(--accent);margin-left:6px;}
+.archivedbanner{background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--accent);padding:9px 12px;font-size:13px;margin-bottom:16px;border-radius:4px;}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;}
+.chip{padding:5px 11px;font-size:12.5px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:14px;cursor:pointer;font-family:inherit;}
+.chip.on{border-color:var(--accent);color:var(--accent);font-weight:600;}
+@media (max-width:640px){.grid2{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
@@ -174,6 +193,8 @@ td.actions{width:80px; text-align:right;}
   </div>
 </div>
 
+<div id="modalOverlay" class="modal"></div>
+
 <header>
   <h1>ICT Inventory Ledger</h1>
   <span class="stamp mono" id="branchCountBadge">— BRANCHES</span>
@@ -183,6 +204,9 @@ td.actions{width:80px; text-align:right;}
     <div class="tab" id="tabAudit">Audit Log</div>
   </div>
   <button class="exportbtn" id="exportBtn" title="Download a full Excel backup">⬇ Export Excel</button>
+  <button class="exportbtn" id="importBtn" title="Import items from Excel (admin)">⬆ Import Excel</button>
+  <button class="logoutbtn" id="templateBtn" title="Download a blank import template">Template</button>
+  <input type="file" id="importFile" accept=".xlsx,.xls,.csv" hidden>
   <div class="userbadge">
     <span>Signed in as <b id="userLabel">—</b></span>
     <button class="logoutbtn" id="logoutBtn">Log out</button>
@@ -193,6 +217,7 @@ td.actions{width:80px; text-align:right;}
     <input id="branchSearch" placeholder="Search branch…">
     <div class="branchlist" id="branchList"></div>
     <div class="addbranch" id="addBranch">+ Add branch</div>
+    <div class="addbranch" id="toggleArchived" style="color:var(--text-dim)">Show archived</div>
   </div>
   <div class="content" id="content"></div>
 </main>
@@ -221,7 +246,8 @@ function applySession(user){
   currentUser = user.email;
   currentRole = (user.app_metadata && user.app_metadata.role) || 'staff';
   document.getElementById('userLabel').textContent = currentUser + (isAdmin() ? ' (admin)' : '');
-  document.getElementById('tabAudit').style.display = isAdmin() ? '' : 'none';
+  document.getElementById('tabAudit').style.display = '';
+  ['importBtn','templateBtn','toggleArchived'].forEach(id=>{ document.getElementById(id).style.display = isAdmin() ? '' : 'none'; });
 }
 
 async function attemptLogin(){
@@ -256,6 +282,8 @@ let state = { branches: [] };
 let auditCache = [];
 let selected = null;
 let view = 'branch';
+let showArchived = false;
+let auditUser = '';
 
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function fmtTs(iso){ try{ return new Date(iso).toLocaleString(); }catch(e){ return iso; } }
@@ -299,18 +327,25 @@ async function loadAllData(){
   }
   showBanner(null);
   state.branches = (branches||[]).map(b=>({
-    id: b.id, name: b.name,
-    items: (items||[]).filter(it=>it.branch_id===b.id).map(it=>({ id:it.id, name:it.name, qty:it.qty, updated_at:it.updated_at }))
+    id:b.id, name:b.name, archived:!!b.archived,
+    items:(items||[]).filter(it=>it.branch_id===b.id).map(it=>({
+      id:it.id, name:it.name, qty:it.qty, serial_no:it.serial_no||'', asset_tag:it.asset_tag||'',
+      status:it.status||'In use', assigned_to:it.assigned_to||'', purchase_date:it.purchase_date||'',
+      notes:it.notes||'', updated_at:it.updated_at
+    }))
   }));
-  if(!selected || !state.branches.find(b=>b.id===selected)){
-    selected = state.branches[0] && state.branches[0].id;
-  }
+  const visible = state.branches.filter(b=>!!b.archived===showArchived);
+  if(!selected || !visible.find(b=>b.id===selected)) selected = (visible[0] && visible[0].id) || null;
   const badge = document.getElementById('branchCountBadge');
-  if(badge) badge.textContent = state.branches.length + (state.branches.length===1 ? ' BRANCH' : ' BRANCHES');
+  const active = state.branches.filter(b=>!b.archived).length;
+  if(badge) badge.textContent = active + (active===1 ? ' BRANCH' : ' BRANCHES');
   render();
 }
 
 /* ---------- mutations ---------- */
+const STATUSES = ['In use','In stock','For repair','Retired','Lost'];
+const ITEM_FIELDS = [['name','Name'],['qty','Qty'],['serial_no','Serial no.'],['asset_tag','Asset tag'],['status','Status'],['assigned_to','Assigned to'],['purchase_date','Purchase date'],['notes','Notes']];
+
 async function renameBranch(b){
   const name = prompt('Rename branch:', b.name);
   if(!name || !name.trim() || name.trim()===b.name) return;
@@ -318,23 +353,36 @@ async function renameBranch(b){
   const { error } = await sb.from('branches').update({ name:name.trim() }).eq('id', b.id);
   if(error){ alert('Rename failed: '+error.message); return; }
   await logAudit('rename_branch', `Renamed branch "${oldName}" to "${name.trim()}"`);
-  refreshAudit();
-  loadAllData();
+  refreshAudit(); loadAllData();
+}
+
+async function archiveBranch(b){
+  if(!isAdmin()) return;
+  if(!confirm(`Archive "${b.name}"? It is hidden from the list but all its items are kept. You can restore it anytime.`)) return;
+  const { error } = await sb.from('branches').update({ archived:true }).eq('id', b.id);
+  if(error){ alert('Archive failed: '+error.message); return; }
+  await logAudit('archive_branch', `Archived branch "${b.name}" (${b.items.length} item rows kept)`);
+  selected = null;
+  refreshAudit(); loadAllData();
+}
+
+async function restoreBranch(b){
+  if(!isAdmin()) return;
+  const { error } = await sb.from('branches').update({ archived:false }).eq('id', b.id);
+  if(error){ alert('Restore failed: '+error.message); return; }
+  await logAudit('restore_branch', `Restored branch "${b.name}"`);
+  showArchived = false; selected = b.id; view = 'branch'; setTabs();
+  refreshAudit(); loadAllData();
 }
 
 async function deleteBranch(b){
-  if(!isAdmin()) return;
-  const itemCount = b.items.reduce((s,it)=>s+Number(it.qty||0),0);
-  const msg = itemCount>0
-    ? `Delete branch "${b.name}"? It has ${itemCount} units logged — this cannot be undone.`
-    : `Delete branch "${b.name}"? This cannot be undone.`;
-  if(!confirm(msg)) return;
+  if(!isAdmin() || !b.archived) return;
+  if(!confirm(`PERMANENTLY delete "${b.name}" and its ${b.items.length} item rows? This cannot be undone. Tip: use Export Excel first.`)) return;
   const { error } = await sb.from('branches').delete().eq('id', b.id);
   if(error){ alert('Delete failed: '+error.message); return; }
-  await logAudit('delete_branch', `Deleted branch "${b.name}" (had ${itemCount} units across ${b.items.length} item types)`);
-  refreshAudit();
-  if(selected===b.id) selected = null;
-  loadAllData();
+  await logAudit('delete_branch', `Permanently deleted archived branch "${b.name}" (${b.items.length} item rows)`);
+  selected = null;
+  refreshAudit(); loadAllData();
 }
 
 async function addBranchPrompt(){
@@ -342,14 +390,13 @@ async function addBranchPrompt(){
   if(!name) return;
   const { data, error } = await sb.from('branches').insert({ name:name.trim() }).select().single();
   if(error){ alert('Add branch failed: '+error.message); return; }
-  selected = data.id; view = 'branch'; setTabs();
+  showArchived = false; selected = data.id; view = 'branch'; setTabs();
   await logAudit('add_branch', `Added branch "${data.name}"`);
-  refreshAudit();
-  loadAllData();
+  refreshAudit(); loadAllData();
 }
 
 async function addItem(b, name, qty){
-  const existing = b.items.find(x=>x.name.toLowerCase()===name.toLowerCase());
+  const existing = b.items.find(x=>x.name.toLowerCase()===name.toLowerCase() && !x.serial_no && !x.asset_tag);
   if(existing){
     const newQty = Number(existing.qty)+qty;
     const { error } = await sb.from('items').update({ qty:newQty, updated_at:new Date().toISOString() }).eq('id', existing.id);
@@ -360,22 +407,57 @@ async function addItem(b, name, qty){
     if(error){ alert('Add item failed: '+error.message); return; }
     await logAudit('add_item', `Added new item "${name}" (qty ${qty}) to ${b.name}`);
   }
-  refreshAudit();
-  loadAllData();
+  refreshAudit(); loadAllData();
 }
 
-async function editItem(b, it){
-  const oldName = it.name, oldQty = it.qty;
-  const name = prompt('Rename item:', it.name);
-  const finalName = (name && name.trim()) ? name.trim() : it.name;
-  const qty = prompt('Set quantity:', it.qty);
-  const finalQty = (qty!==null && !isNaN(Number(qty))) ? Math.max(0, Number(qty)) : it.qty;
-  if(finalName===oldName && Number(finalQty)===Number(oldQty)) return;
-  const { error } = await sb.from('items').update({ name:finalName, qty:finalQty, updated_at:new Date().toISOString() }).eq('id', it.id);
-  if(error){ alert('Update failed: '+error.message); return; }
-  await logAudit('edit_item', `Edited "${oldName}" (qty ${oldQty}) → "${finalName}" (qty ${finalQty}) in ${b.name}`);
-  refreshAudit();
-  loadAllData();
+function closeModal(){ const ov = document.getElementById('modalOverlay'); ov.style.display = 'none'; ov.innerHTML = ''; }
+
+function openItemModal(b, it){
+  const isNew = !it;
+  const v = it || { name:'', qty:1, serial_no:'', asset_tag:'', status:'In use', assigned_to:'', purchase_date:'', notes:'' };
+  const opts = STATUSES.includes(v.status) ? STATUSES : [v.status].concat(STATUSES);
+  const ov = document.getElementById('modalOverlay');
+  ov.innerHTML = `<div class="modalbox">
+    <h3>${isNew ? 'Add item with details' : 'Edit item'}<span class="sub2">${escapeHtml(b.name)}</span></h3>
+    <div class="grid2">
+      <label>Item name<input id="m_name" value="${escapeHtml(v.name)}"></label>
+      <label>Qty<input id="m_qty" type="number" min="0" value="${escapeHtml(v.qty)}"></label>
+      <label>Serial no.<input id="m_serial" value="${escapeHtml(v.serial_no)}"></label>
+      <label>Asset tag<input id="m_tag" value="${escapeHtml(v.asset_tag)}"></label>
+      <label>Status<select id="m_status">${opts.map(o=>`<option${o===v.status?' selected':''}>${escapeHtml(o)}</option>`).join('')}</select></label>
+      <label>Assigned to<input id="m_assigned" value="${escapeHtml(v.assigned_to)}"></label>
+      <label>Purchase date<input id="m_date" type="date" value="${escapeHtml(v.purchase_date)}"></label>
+    </div>
+    <label>Notes<textarea id="m_notes" rows="2">${escapeHtml(v.notes)}</textarea></label>
+    <div class="loginerr" id="m_err"></div>
+    <div class="mactions"><button class="ghostbtn" id="m_cancel">Cancel</button><button class="primary-btn" id="m_save">Save</button></div>
+  </div>`;
+  ov.style.display = 'flex';
+  ov.onclick = e=>{ if(e.target===ov) closeModal(); };
+  document.getElementById('m_cancel').onclick = closeModal;
+  document.getElementById('m_save').onclick = async ()=>{
+    const g = id=>document.getElementById(id).value.trim();
+    const err = document.getElementById('m_err');
+    const name = g('m_name'), qty = Number(g('m_qty')||0);
+    if(!name){ err.textContent = 'Item name is required.'; return; }
+    if(isNaN(qty) || qty<0){ err.textContent = 'Qty must be 0 or more.'; return; }
+    const nv = { name, qty, serial_no:g('m_serial'), asset_tag:g('m_tag'), status:g('m_status')||'In use', assigned_to:g('m_assigned'), purchase_date:g('m_date'), notes:g('m_notes') };
+    const row = { name, qty, serial_no:nv.serial_no||null, asset_tag:nv.asset_tag||null, status:nv.status, assigned_to:nv.assigned_to||null, purchase_date:nv.purchase_date||null, notes:nv.notes||null, updated_at:new Date().toISOString() };
+    let res, msg;
+    if(isNew){
+      res = await sb.from('items').insert(Object.assign({ branch_id:b.id }, row));
+      msg = `Added "${name}" (qty ${qty}${nv.asset_tag?', tag '+nv.asset_tag:''}${nv.serial_no?', S/N '+nv.serial_no:''}) to ${b.name}`;
+    } else {
+      const diffs = ITEM_FIELDS.filter(([k])=>String(it[k]==null?'':it[k])!==String(nv[k]==null?'':nv[k])).map(([k,l])=>`${l}: ${it[k]||'—'} → ${nv[k]||'—'}`);
+      if(!diffs.length){ closeModal(); return; }
+      res = await sb.from('items').update(row).eq('id', it.id);
+      msg = `Edited "${it.name}" in ${b.name} — ${diffs.join('; ')}`;
+    }
+    if(res.error){ err.textContent = 'Save failed: '+res.error.message; return; }
+    closeModal();
+    await logAudit(isNew?'add_item':'edit_item', msg);
+    refreshAudit(); loadAllData();
+  };
 }
 
 async function bumpItem(b, it, delta){
@@ -383,16 +465,14 @@ async function bumpItem(b, it, delta){
   const { error } = await sb.from('items').update({ qty:newQty, updated_at:new Date().toISOString() }).eq('id', it.id);
   if(error){ alert('Update failed: '+error.message); return; }
   await logAudit(delta>0?'increment':'decrement', `${delta>0?'+1':'-1'} "${it.name}" in ${b.name} → now ${newQty}`);
-  refreshAudit();
-  loadAllData();
+  refreshAudit(); loadAllData();
 }
 
 async function deleteItem(b, it){
   const { error } = await sb.from('items').delete().eq('id', it.id);
   if(error){ alert('Delete failed: '+error.message); return; }
-  await logAudit('delete_item', `Removed "${it.name}" (qty ${it.qty}) from ${b.name}`);
-  refreshAudit();
-  loadAllData();
+  await logAudit('delete_item', `Removed "${it.name}" (qty ${it.qty}${it.asset_tag?', tag '+it.asset_tag:''}) from ${b.name}`);
+  refreshAudit(); loadAllData();
 }
 
 /* ---------- render ---------- */
@@ -407,16 +487,22 @@ function renderBranchList(){
   const q = (document.getElementById('branchSearch').value||'').toLowerCase();
   const list = document.getElementById('branchList');
   list.innerHTML = '';
-  state.branches.filter(b=>b.name.toLowerCase().includes(q)).forEach(b=>{
+  state.branches.filter(b=>!!b.archived===showArchived && b.name.toLowerCase().includes(q)).forEach(b=>{
     const total = b.items.reduce((s,it)=>s+Number(it.qty||0),0);
     const row = document.createElement('div');
     row.className = 'branchrow' + (b.id===selected?' active':'');
-    row.innerHTML = `<span class="bname">${escapeHtml(b.name)}</span><span class="rowbtns"><button class="editbtn" data-a="edit" title="Rename">✎</button>${isAdmin()?'<button class="delbtn" data-a="delbranch" title="Delete branch">🗑</button>':''}<span class="cnt">${total}</span></span>`;
+    const adminBtn = !isAdmin() ? '' : (b.archived
+      ? '<button class="editbtn" data-a="restore" title="Restore branch">↩</button>'
+      : '<button class="editbtn" data-a="archive" title="Archive branch">📦</button>');
+    row.innerHTML = `<span class="bname">${escapeHtml(b.name)}</span><span class="rowbtns"><button class="editbtn" data-a="edit" title="Rename">✎</button>${adminBtn}<span class="cnt">${total}</span></span>`;
     row.querySelector('.bname').onclick = ()=>{ selected=b.id; view='branch'; setTabs(); render(); };
     row.querySelector('[data-a=edit]').onclick = (e)=>{ e.stopPropagation(); renameBranch(b); };
-    const dbtn = row.querySelector('[data-a=delbranch]'); if(dbtn) dbtn.onclick = (e)=>{ e.stopPropagation(); deleteBranch(b); };
+    const ab = row.querySelector('[data-a=archive]'); if(ab) ab.onclick = (e)=>{ e.stopPropagation(); archiveBranch(b); };
+    const rb = row.querySelector('[data-a=restore]'); if(rb) rb.onclick = (e)=>{ e.stopPropagation(); restoreBranch(b); };
     list.appendChild(row);
   });
+  const arch = state.branches.filter(b=>b.archived).length;
+  document.getElementById('toggleArchived').textContent = showArchived ? '← Back to active branches' : (arch ? `Show archived (${arch})` : 'No archived branches');
 }
 
 function setTabs(){
@@ -427,62 +513,71 @@ function setTabs(){
 
 function renderBranch(){
   const content = document.getElementById('content');
-  const b = state.branches.find(x=>x.id===selected) || state.branches[0];
-  if(!b){ content.innerHTML='<div class="empty">No branches yet.</div>'; return; }
+  const visible = state.branches.filter(x=>!!x.archived===showArchived);
+  const b = state.branches.find(x=>x.id===selected) || visible[0];
+  if(!b){ content.innerHTML = `<div class="empty">${showArchived ? 'No archived branches.' : 'No branches yet.'}</div>`; return; }
   selected = b.id;
+  const ro = !!b.archived;
   const total = b.items.reduce((s,it)=>s+Number(it.qty||0),0);
+  const adminBtns = !isAdmin() ? '' : (ro
+    ? '<button class="ghostbtn" id="restoreBtn">↩ Restore</button><button class="ghostbtn dangerbtn" id="purgeBtn">Delete permanently</button>'
+    : '<button class="ghostbtn" id="archiveBtn">📦 Archive</button>');
   content.innerHTML = `
-    <h2>${escapeHtml(b.name)} <button class="editbtn" id="editBranchName" title="Rename branch">✎</button>${isAdmin()?'<button class="delbtn" id="deleteBranchBtn" title="Delete branch">🗑</button>':''}</h2>
+    <h2>${escapeHtml(b.name)} <button class="editbtn" id="editBranchName" title="Rename branch">✎</button>${adminBtns}</h2>
     <div class="sub">ICT inventory for this branch</div>
+    ${ro ? '<div class="archivedbanner">This branch is archived (read-only). Restore it to make changes.</div>' : `
     <div class="addrow">
       <input name="iname" placeholder="Item name (e.g. Laptop)">
       <input name="iqty" type="number" min="1" value="1" placeholder="Qty">
       <button id="addItemBtn">Add item</button>
     </div>
+    <div style="margin:-8px 0 16px"><button class="ghostbtn" id="addDetailBtn" style="margin-left:0">+ Add asset with details (serial, tag, status…)</button></div>`}
     <table>
       <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th></th><th></th></tr></thead>
       <tbody id="itemsBody"></tbody>
     </table>
-    ${b.items.length===0 ? '<div class="empty">No items logged yet — add one above.</div>' : ''}
+    ${b.items.length===0 ? '<div class="empty">No items logged yet.</div>' : ''}
     <div class="total">Total units in ${escapeHtml(b.name)}: <b>${total}</b></div>
   `;
   document.getElementById('editBranchName').onclick = ()=>renameBranch(b);
-  const dbb = document.getElementById('deleteBranchBtn'); if(dbb) dbb.onclick = ()=>deleteBranch(b);
+  const on = (id, fn)=>{ const el = document.getElementById(id); if(el) el.onclick = fn; };
+  on('archiveBtn', ()=>archiveBranch(b)); on('restoreBtn', ()=>restoreBranch(b)); on('purgeBtn', ()=>deleteBranch(b));
+  on('addDetailBtn', ()=>openItemModal(b, null));
   const tbody = document.getElementById('itemsBody');
   b.items.forEach(it=>{
+    const meta = [it.serial_no && `S/N ${it.serial_no}`, it.asset_tag && `Tag ${it.asset_tag}`, it.assigned_to && `Assigned: ${it.assigned_to}`].filter(Boolean).join(' · ');
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><span class="itemname">${escapeHtml(it.name)}</span> <button class="editbtn" data-a="rename" title="Rename item">✎</button></td>
+    tr.innerHTML = `<td><span class="itemname">${escapeHtml(it.name)}</span>${ro?'':' <button class="editbtn" data-a="rename" title="Edit details">✎</button>'}${it.status && it.status!=='In use' ? `<span class="pill">${escapeHtml(it.status)}</span>` : ''}${meta ? `<div class="itemmeta">${escapeHtml(meta)}</div>` : ''}</td>
       <td class="qty">${it.qty}</td>
-      <td class="actions"><button class="qtybtn" data-a="dec">−</button> <button class="qtybtn" data-a="inc">+</button></td>
-      <td class="actions"><button class="del" data-a="del">remove</button></td>`;
-    tr.querySelector('[data-a=rename]').onclick=()=>editItem(b, it);
-    tr.querySelector('[data-a=inc]').onclick=()=>bumpItem(b, it, 1);
-    tr.querySelector('[data-a=dec]').onclick=()=>bumpItem(b, it, -1);
-    tr.querySelector('[data-a=del]').onclick=()=>deleteItem(b, it);
+      <td class="actions">${ro?'':'<button class="qtybtn" data-a="dec">−</button> <button class="qtybtn" data-a="inc">+</button>'}</td>
+      <td class="actions">${ro?'':'<button class="del" data-a="del">remove</button>'}</td>`;
+    const h = (a, fn)=>{ const el = tr.querySelector(`[data-a=${a}]`); if(el) el.onclick = fn; };
+    h('rename', ()=>openItemModal(b, it)); h('inc', ()=>bumpItem(b, it, 1)); h('dec', ()=>bumpItem(b, it, -1)); h('del', ()=>deleteItem(b, it));
     tbody.appendChild(tr);
   });
-  document.getElementById('addItemBtn').onclick = ()=>{
-    const nameEl = content.querySelector('input[name=iname]');
-    const qtyEl = content.querySelector('input[name=iqty]');
-    const name = nameEl.value.trim();
-    const qty = Number(qtyEl.value)||1;
-    if(!name) return;
-    nameEl.value=''; qtyEl.value=1; nameEl.focus();
-    addItem(b, name, qty);
-  };
+  if(!ro){
+    document.getElementById('addItemBtn').onclick = ()=>{
+      const nameEl = content.querySelector('input[name=iname]');
+      const qtyEl = content.querySelector('input[name=iqty]');
+      const name = nameEl.value.trim();
+      const qty = Number(qtyEl.value)||1;
+      if(!name) return;
+      nameEl.value=''; qtyEl.value=1; nameEl.focus();
+      addItem(b, name, qty);
+    };
+  }
 }
 
 function renderOverview(){
   const content = document.getElementById('content');
+  const active = state.branches.filter(b=>!b.archived);
   const totals = {};
-  state.branches.forEach(b=>b.items.forEach(it=>{
-    totals[it.name] = (totals[it.name]||0) + Number(it.qty||0);
-  }));
+  active.forEach(b=>b.items.forEach(it=>{ totals[it.name] = (totals[it.name]||0) + Number(it.qty||0); }));
   const names = Object.keys(totals).sort();
   const grand = names.reduce((s,n)=>s+totals[n],0);
   content.innerHTML = `
     <h2>All Items — Company Wide</h2>
-    <div class="sub">Totals across all 53 branches</div>
+    <div class="sub">Totals across ${active.length} active branch${active.length===1?'':'es'} (archived branches excluded)</div>
     ${names.length===0 ? '<div class="empty">No items logged anywhere yet.</div>' :
       names.map(n=>`<div class="overview-row"><span>${escapeHtml(n)}</span><span class="n">${totals[n]}</span></div>`).join('')}
     ${names.length ? `<div class="total">Grand total units: <b>${grand}</b></div>` : ''}
@@ -491,69 +586,171 @@ function renderOverview(){
 
 function renderAudit(){
   const content = document.getElementById('content');
+  const stats = {};
+  auditCache.forEach(e=>{
+    const u = e.app_user || 'unknown';
+    if(!stats[u]) stats[u] = { n:0, last:e.ts };
+    stats[u].n++; if(e.ts > stats[u].last) stats[u].last = e.ts;
+  });
+  const users = Object.keys(stats).sort();
+  if(auditUser && !stats[auditUser]) auditUser = '';
+  const rows = auditUser ? auditCache.filter(e=>e.app_user===auditUser) : auditCache;
   content.innerHTML = `
     <h2>Audit Log</h2>
-    <div class="sub">Live activity across all branches, most recent first (last 500 kept)</div>
-    ${auditCache.length===0 ? '<div class="empty">No activity logged yet.</div>' : `
+    <div class="sub">Live activity from all users, most recent first (last 500 kept). Click a user to filter.</div>
+    <div class="chips">
+      <button class="chip${auditUser?'':' on'}" data-u="">All users (${users.length})</button>
+      ${users.map(u=>`<button class="chip${auditUser===u?' on':''}" data-u="${escapeHtml(u)}" title="Last active ${escapeHtml(fmtTs(stats[u].last))}">${escapeHtml(u)} · ${stats[u].n}</button>`).join('')}
+    </div>
+    ${rows.length===0 ? '<div class="empty">No activity logged yet.</div>' : `
     <table class="audittable">
       <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
       <tbody>
-        ${auditCache.map(e=>`<tr><td class="ts">${escapeHtml(fmtTs(e.ts))}</td><td class="user">${escapeHtml(e.app_user)}</td><td class="action">${escapeHtml(e.action)}</td><td>${escapeHtml(e.details)}</td></tr>`).join('')}
+        ${rows.map(e=>`<tr><td class="ts">${escapeHtml(fmtTs(e.ts))}</td><td class="user">${escapeHtml(e.app_user)}</td><td class="action">${escapeHtml(e.action)}</td><td>${escapeHtml(e.details)}</td></tr>`).join('')}
       </tbody>
     </table>`}
   `;
+  content.querySelectorAll('.chip').forEach(c=>{ c.onclick = ()=>{ auditUser = c.dataset.u; renderAudit(); }; });
 }
 
-/* ---------- Excel export / backup ---------- */
+/* ---------- Excel export / import ---------- */
 function makeSheet(rows, header, widths){
   const ws = XLSX.utils.json_to_sheet(rows, { header });
   ws['!cols'] = widths.map(w=>({ wch:w }));
   return ws;
 }
+const INV_HEADER = ['Branch','Item','Qty','Serial No','Asset Tag','Status','Assigned To','Purchase Date','Notes','Last Updated','Archived'];
+const INV_WIDTHS = [22,30,8,20,16,12,22,14,30,22,10];
 
 async function exportExcel(){
   if(typeof XLSX === 'undefined'){ alert('Excel library did not load. Open the file in a normal browser tab.'); return; }
   const btn = document.getElementById('exportBtn');
   btn.disabled = true; btn.textContent = 'Exporting…';
   try{
-    await loadAllData(); // make sure the export uses the latest data
+    await loadAllData();
     const stamp = new Date().toISOString().slice(0,10);
-
     const inventory = [], totals = {};
     const byBranch = state.branches.map(b=>{
       let units = 0;
       b.items.forEach(it=>{
         const q = Number(it.qty||0);
         units += q;
-        totals[it.name] = (totals[it.name]||0) + q;
-        inventory.push({ Branch:b.name, Item:it.name, Qty:q, 'Last Updated': it.updated_at ? fmtTs(it.updated_at) : '' });
+        if(!b.archived) totals[it.name] = (totals[it.name]||0) + q;
+        inventory.push({ Branch:b.name, Item:it.name, Qty:q, 'Serial No':it.serial_no, 'Asset Tag':it.asset_tag, Status:it.status, 'Assigned To':it.assigned_to, 'Purchase Date':it.purchase_date, Notes:it.notes, 'Last Updated': it.updated_at ? fmtTs(it.updated_at) : '', Archived: b.archived ? 'Yes' : 'No' });
       });
-      return { Branch:b.name, 'Item Types':b.items.length, 'Total Units':units };
+      return { Branch:b.name, 'Item Types':b.items.length, 'Total Units':units, Archived: b.archived ? 'Yes' : 'No' };
     });
     const companyTotals = Object.keys(totals).sort().map(n=>({ Item:n, 'Total Units':totals[n] }));
-
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, makeSheet(inventory, ['Branch','Item','Qty','Last Updated'], [24,32,8,22]), 'Inventory');
-    XLSX.utils.book_append_sheet(wb, makeSheet(byBranch, ['Branch','Item Types','Total Units'], [24,12,12]), 'By Branch');
+    XLSX.utils.book_append_sheet(wb, makeSheet(inventory, INV_HEADER, INV_WIDTHS), 'Inventory');
+    XLSX.utils.book_append_sheet(wb, makeSheet(byBranch, ['Branch','Item Types','Total Units','Archived'], [24,12,12,10]), 'By Branch');
     XLSX.utils.book_append_sheet(wb, makeSheet(companyTotals, ['Item','Total Units'], [32,12]), 'Company Totals');
-
-    if(isAdmin()){
+    {
       const { data } = await sb.from('audit_log').select('*').order('ts', { ascending:false }).limit(1000);
       const audit = (data||[]).map(e=>({ Time:fmtTs(e.ts), User:e.app_user, Action:e.action, Details:e.details }));
       XLSX.utils.book_append_sheet(wb, makeSheet(audit, ['Time','User','Action','Details'], [22,28,16,70]), 'Audit Log (last 1000)');
     }
-
     XLSX.writeFile(wb, `ICT-Inventory-Backup-${stamp}.xlsx`);
     await logAudit('export', `Exported inventory to Excel (${inventory.length} item rows)`);
     refreshAudit();
   }catch(e){
-    console.error(e);
-    alert('Export failed: ' + (e.message || e));
+    console.error(e); alert('Export failed: ' + (e.message || e));
   }finally{
     btn.disabled = false; btn.textContent = '⬇ Export Excel';
   }
 }
+
+function downloadTemplate(){
+  if(typeof XLSX === 'undefined'){ alert('Excel library did not load.'); return; }
+  const rows = [
+    { Branch:'S01', Item:'Laptop', Qty:1, 'Serial No':'SN12345', 'Asset Tag':'GCG-0001', Status:'In use', 'Assigned To':'Juan Dela Cruz', 'Purchase Date':'2025-03-01', Notes:'Example asset row' },
+    { Branch:'S01', Item:'Desktop', Qty:10, 'Serial No':'', 'Asset Tag':'', Status:'', 'Assigned To':'', 'Purchase Date':'', Notes:'Example bulk row (no serial/tag)' }
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, makeSheet(rows, INV_HEADER.slice(0,9), INV_WIDTHS), 'Inventory');
+  XLSX.writeFile(wb, 'ICT-Inventory-Import-Template.xlsx');
+}
+
+const IMPORT_MAP = { branch:'branch', item:'item', qty:'qty', serialno:'serial_no', assettag:'asset_tag', status:'status', assignedto:'assigned_to', purchasedate:'purchase_date', notes:'notes' };
+function normDate(v){
+  v = String(v||'').trim(); if(!v) return null;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const d = new Date(v); if(isNaN(d)) return null;
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function findExisting(b, r){
+  if(!b) return null;
+  const eq = (a, c)=>a && a.toLowerCase()===c.toLowerCase();
+  if(r.asset_tag) return b.items.find(i=>eq(i.asset_tag, r.asset_tag));
+  if(r.serial_no) return b.items.find(i=>eq(i.serial_no, r.serial_no));
+  return b.items.find(i=>!i.serial_no && !i.asset_tag && eq(i.name, r.name));
+}
+
+async function importExcel(file){
+  if(!isAdmin() || !file) return;
+  if(typeof XLSX === 'undefined'){ alert('Excel library did not load. Open the file in a normal browser tab.'); return; }
+  const btn = document.getElementById('importBtn');
+  btn.disabled = true; btn.textContent = 'Importing…';
+  try{
+    const wb = XLSX.read(await file.arrayBuffer(), { type:'array' });
+    const ws = wb.Sheets['Inventory'] || wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(ws, { defval:'', raw:false });
+    const rows = []; let skipped = 0;
+    raw.forEach(r=>{
+      const o = {};
+      Object.keys(r).forEach(k=>{ const m = IMPORT_MAP[k.toLowerCase().replace(/[^a-z]/g,'')]; if(m) o[m] = String(r[k]).trim(); });
+      const qty = (o.qty===undefined || o.qty==='') ? 1 : Number(o.qty);
+      if(!o.branch || !o.item || isNaN(qty) || qty<0){ skipped++; return; }
+      rows.push({ branch:o.branch, name:o.item, qty, serial_no:o.serial_no||null, asset_tag:o.asset_tag||null, status:o.status||null, assigned_to:o.assigned_to||null, purchase_date:normDate(o.purchase_date), notes:o.notes||null });
+    });
+    if(!rows.length){ alert('No valid rows found. The sheet needs the columns Branch, Item and Qty. Use the Template button for an example.'); return; }
+
+    const byName = {};
+    state.branches.forEach(b=>{ byName[b.name.toLowerCase()] = b; });
+    const newBranches = {};
+    rows.forEach(r=>{ if(!byName[r.branch.toLowerCase()]) newBranches[r.branch.toLowerCase()] = r.branch; });
+    const inserts = [], updates = [];
+    rows.forEach(r=>{
+      const ex = findExisting(byName[r.branch.toLowerCase()], r);
+      if(ex) updates.push({ id:ex.id, r }); else inserts.push(r);
+    });
+    const nb = Object.keys(newBranches).length;
+    if(!confirm(`Import ${rows.length} rows from "${file.name}"?\n\n• ${nb} new branch${nb===1?'':'es'}\n• ${inserts.length} new items\n• ${updates.length} existing items updated (matched by asset tag, serial no, or item name)\n${skipped ? `• ${skipped} rows skipped (missing Branch/Item or invalid Qty)\n` : ''}\nThis cannot be undone — tip: Export Excel first.`)) return;
+
+    if(nb){
+      const { data, error } = await sb.from('branches').insert(Object.values(newBranches).map(n=>({ name:n }))).select();
+      if(error) throw error;
+      data.forEach(b=>{ byName[b.name.toLowerCase()] = { id:b.id, name:b.name, items:[] }; });
+    }
+    const now = new Date().toISOString();
+    const newRows = inserts.map(r=>({ branch_id:byName[r.branch.toLowerCase()].id, name:r.name, qty:r.qty, serial_no:r.serial_no, asset_tag:r.asset_tag, status:r.status||'In use', assigned_to:r.assigned_to, purchase_date:r.purchase_date, notes:r.notes }));
+    for(let i=0;i<newRows.length;i+=200){
+      const { error } = await sb.from('items').insert(newRows.slice(i,i+200));
+      if(error) throw error;
+    }
+    for(let i=0;i<updates.length;i+=20){
+      const results = await Promise.all(updates.slice(i,i+20).map(({id, r})=>{
+        const p = { name:r.name, qty:r.qty, updated_at:now };
+        ['serial_no','asset_tag','status','assigned_to','purchase_date','notes'].forEach(f=>{ if(r[f]) p[f] = r[f]; });
+        return sb.from('items').update(p).eq('id', id);
+      }));
+      const bad = results.find(x=>x.error); if(bad) throw bad.error;
+    }
+    await logAudit('import', `Imported "${file.name}": ${nb} new branches, ${inserts.length} new items, ${updates.length} updated`);
+    refreshAudit(); loadAllData();
+    alert(`Import done: ${inserts.length} added, ${updates.length} updated${nb ? ', '+nb+' new branches' : ''}.`);
+  }catch(e){
+    console.error(e); alert('Import failed (some rows may have been applied): ' + (e.message || JSON.stringify(e)));
+    loadAllData();
+  }finally{
+    btn.disabled = false; btn.textContent = '⬆ Import Excel';
+  }
+}
+
 document.getElementById('exportBtn').onclick = exportExcel;
+document.getElementById('templateBtn').onclick = downloadTemplate;
+document.getElementById('importBtn').onclick = ()=>document.getElementById('importFile').click();
+document.getElementById('importFile').onchange = (e)=>{ const f = e.target.files[0]; e.target.value = ''; importExcel(f); };
 
 /* ---------- tabs / search / add branch ---------- */
 document.getElementById('tabBranch').onclick = ()=>{ view='branch'; setTabs(); render(); };
@@ -561,6 +758,16 @@ document.getElementById('tabAll').onclick = ()=>{ view='all'; setTabs(); render(
 document.getElementById('tabAudit').onclick = ()=>{ view='audit'; setTabs(); render(); };
 document.getElementById('branchSearch').oninput = renderBranchList;
 document.getElementById('addBranch').onclick = addBranchPrompt;
+
+document.getElementById('toggleArchived').onclick = ()=>{
+  showArchived = !showArchived; view = 'branch'; setTabs();
+  const v = state.branches.filter(b=>!!b.archived===showArchived);
+  selected = (v[0] && v[0].id) || null;
+  render();
+};
+
+let rtTimer = null;
+function scheduleReload(){ clearTimeout(rtTimer); rtTimer = setTimeout(loadAllData, 300); }
 
 /* ---------- boot ---------- */
 let subscribed = false;
@@ -570,8 +777,8 @@ async function boot(){
   await refreshAudit();
   if(!subscribed){
     sb.channel('inventory-realtime')
-      .on('postgres_changes', { event:'*', schema:'public', table:'items' }, loadAllData)
-      .on('postgres_changes', { event:'*', schema:'public', table:'branches' }, loadAllData)
+      .on('postgres_changes', { event:'*', schema:'public', table:'items' }, scheduleReload)
+      .on('postgres_changes', { event:'*', schema:'public', table:'branches' }, scheduleReload)
       .on('postgres_changes', { event:'*', schema:'public', table:'audit_log' }, refreshAudit)
       .subscribe();
     subscribed = true;
