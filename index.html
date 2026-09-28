@@ -56,6 +56,8 @@ header .stamp{
   border-radius:4px; cursor:pointer; font-size:12px;
 }
 .logoutbtn:hover{color:var(--danger); border-color:var(--danger);}
+.exportbtn{padding:6px 12px; background:var(--accent); color:#14181c; border:none; border-radius:4px; cursor:pointer; font-size:12.5px; font-weight:600;}
+.exportbtn:disabled{opacity:.6; cursor:wait;}
 main{flex:1; display:flex; min-height:0; overflow:hidden;}
 .rail{
   width:230px; min-width:170px; border-right:1px solid var(--border); background:var(--surface);
@@ -180,6 +182,7 @@ td.actions{width:80px; text-align:right;}
     <div class="tab" id="tabAll">All Items</div>
     <div class="tab" id="tabAudit">Audit Log</div>
   </div>
+  <button class="exportbtn" id="exportBtn" title="Download a full Excel backup">⬇ Export Excel</button>
   <div class="userbadge">
     <span>Signed in as <b id="userLabel">—</b></span>
     <button class="logoutbtn" id="logoutBtn">Log out</button>
@@ -194,6 +197,7 @@ td.actions{width:80px; text-align:right;}
   <div class="content" id="content"></div>
 </main>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 const SUPABASE_URL = 'https://maflvhksxdcbgqmogfee.supabase.co';
@@ -296,7 +300,7 @@ async function loadAllData(){
   showBanner(null);
   state.branches = (branches||[]).map(b=>({
     id: b.id, name: b.name,
-    items: (items||[]).filter(it=>it.branch_id===b.id).map(it=>({ id:it.id, name:it.name, qty:it.qty }))
+    items: (items||[]).filter(it=>it.branch_id===b.id).map(it=>({ id:it.id, name:it.name, qty:it.qty, updated_at:it.updated_at }))
   }));
   if(!selected || !state.branches.find(b=>b.id===selected)){
     selected = state.branches[0] && state.branches[0].id;
@@ -499,6 +503,57 @@ function renderAudit(){
     </table>`}
   `;
 }
+
+/* ---------- Excel export / backup ---------- */
+function makeSheet(rows, header, widths){
+  const ws = XLSX.utils.json_to_sheet(rows, { header });
+  ws['!cols'] = widths.map(w=>({ wch:w }));
+  return ws;
+}
+
+async function exportExcel(){
+  if(typeof XLSX === 'undefined'){ alert('Excel library did not load. Open the file in a normal browser tab.'); return; }
+  const btn = document.getElementById('exportBtn');
+  btn.disabled = true; btn.textContent = 'Exporting…';
+  try{
+    await loadAllData(); // make sure the export uses the latest data
+    const stamp = new Date().toISOString().slice(0,10);
+
+    const inventory = [], totals = {};
+    const byBranch = state.branches.map(b=>{
+      let units = 0;
+      b.items.forEach(it=>{
+        const q = Number(it.qty||0);
+        units += q;
+        totals[it.name] = (totals[it.name]||0) + q;
+        inventory.push({ Branch:b.name, Item:it.name, Qty:q, 'Last Updated': it.updated_at ? fmtTs(it.updated_at) : '' });
+      });
+      return { Branch:b.name, 'Item Types':b.items.length, 'Total Units':units };
+    });
+    const companyTotals = Object.keys(totals).sort().map(n=>({ Item:n, 'Total Units':totals[n] }));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, makeSheet(inventory, ['Branch','Item','Qty','Last Updated'], [24,32,8,22]), 'Inventory');
+    XLSX.utils.book_append_sheet(wb, makeSheet(byBranch, ['Branch','Item Types','Total Units'], [24,12,12]), 'By Branch');
+    XLSX.utils.book_append_sheet(wb, makeSheet(companyTotals, ['Item','Total Units'], [32,12]), 'Company Totals');
+
+    if(isAdmin()){
+      const { data } = await sb.from('audit_log').select('*').order('ts', { ascending:false }).limit(1000);
+      const audit = (data||[]).map(e=>({ Time:fmtTs(e.ts), User:e.app_user, Action:e.action, Details:e.details }));
+      XLSX.utils.book_append_sheet(wb, makeSheet(audit, ['Time','User','Action','Details'], [22,28,16,70]), 'Audit Log (last 1000)');
+    }
+
+    XLSX.writeFile(wb, `ICT-Inventory-Backup-${stamp}.xlsx`);
+    await logAudit('export', `Exported inventory to Excel (${inventory.length} item rows)`);
+    refreshAudit();
+  }catch(e){
+    console.error(e);
+    alert('Export failed: ' + (e.message || e));
+  }finally{
+    btn.disabled = false; btn.textContent = '⬇ Export Excel';
+  }
+}
+document.getElementById('exportBtn').onclick = exportExcel;
 
 /* ---------- tabs / search / add branch ---------- */
 document.getElementById('tabBranch').onclick = ()=>{ view='branch'; setTabs(); render(); };
