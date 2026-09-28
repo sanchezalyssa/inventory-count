@@ -202,6 +202,7 @@ td.actions{width:80px; text-align:right;}
     <div class="tab active" id="tabBranch">By Branch</div>
     <div class="tab" id="tabAll">All Items</div>
     <div class="tab" id="tabAudit">Audit Log</div>
+    <div class="tab" id="tabBackups">Backups</div>
   </div>
   <button class="exportbtn" id="exportBtn" title="Download a full Excel backup">⬇ Export Excel</button>
   <button class="exportbtn" id="importBtn" title="Import items from Excel (admin)">⬆ Import Excel</button>
@@ -247,7 +248,7 @@ function applySession(user){
   currentRole = (user.app_metadata && user.app_metadata.role) || 'staff';
   document.getElementById('userLabel').textContent = currentUser + (isAdmin() ? ' (admin)' : '');
   document.getElementById('tabAudit').style.display = '';
-  ['importBtn','templateBtn','toggleArchived'].forEach(id=>{ document.getElementById(id).style.display = isAdmin() ? '' : 'none'; });
+  ['importBtn','templateBtn','toggleArchived','tabBackups'].forEach(id=>{ document.getElementById(id).style.display = isAdmin() ? '' : 'none'; });
 }
 
 async function attemptLogin(){
@@ -314,11 +315,33 @@ async function refreshAudit(){
   if(view==='audit') render();
 }
 
+// Supabase returns at most 1000 rows per request, so read big tables in pages.
+async function fetchAll(table){
+  let all = [], from = 0; const size = 1000;
+  while(true){
+    const { data, error } = await sb.from(table).select('*').order('name').order('id').range(from, from+size-1);
+    if(error) return { data:null, error };
+    all = all.concat(data || []);
+    if(!data || data.length < size) break;
+    from += size;
+  }
+  return { data:all, error:null };
+}
+
+function nestData(branches, items){
+  const byBranch = {};
+  (items||[]).forEach(it=>{
+    (byBranch[it.branch_id] = byBranch[it.branch_id] || []).push({
+      id:it.id, name:it.name, qty:it.qty, serial_no:it.serial_no||'', asset_tag:it.asset_tag||'',
+      status:it.status||'In use', assigned_to:it.assigned_to||'', purchase_date:it.purchase_date||'',
+      notes:it.notes||'', updated_at:it.updated_at
+    });
+  });
+  return (branches||[]).map(b=>({ id:b.id, name:b.name, archived:!!b.archived, items:byBranch[b.id]||[] }));
+}
+
 async function loadAllData(){
-  const [{ data: branches, error: be }, { data: items, error: ie }] = await Promise.all([
-    sb.from('branches').select('*').order('name'),
-    sb.from('items').select('*').order('name')
-  ]);
+  const [{ data: branches, error: be }, { data: items, error: ie }] = await Promise.all([ fetchAll('branches'), fetchAll('items') ]);
   if(be || ie){
     const err = be||ie;
     console.error('load failed', err);
@@ -326,14 +349,7 @@ async function loadAllData(){
     return;
   }
   showBanner(null);
-  state.branches = (branches||[]).map(b=>({
-    id:b.id, name:b.name, archived:!!b.archived,
-    items:(items||[]).filter(it=>it.branch_id===b.id).map(it=>({
-      id:it.id, name:it.name, qty:it.qty, serial_no:it.serial_no||'', asset_tag:it.asset_tag||'',
-      status:it.status||'In use', assigned_to:it.assigned_to||'', purchase_date:it.purchase_date||'',
-      notes:it.notes||'', updated_at:it.updated_at
-    }))
-  }));
+  state.branches = nestData(branches, items);
   const visible = state.branches.filter(b=>!!b.archived===showArchived);
   if(!selected || !visible.find(b=>b.id===selected)) selected = (visible[0] && visible[0].id) || null;
   const badge = document.getElementById('branchCountBadge');
@@ -378,6 +394,7 @@ async function restoreBranch(b){
 async function deleteBranch(b){
   if(!isAdmin() || !b.archived) return;
   if(!confirm(`PERMANENTLY delete "${b.name}" and its ${b.items.length} item rows? This cannot be undone. Tip: use Export Excel first.`)) return;
+  if(!(await takeSnapshot('pre-delete', false))) return;
   const { error } = await sb.from('branches').delete().eq('id', b.id);
   if(error){ alert('Delete failed: '+error.message); return; }
   await logAudit('delete_branch', `Permanently deleted archived branch "${b.name}" (${b.items.length} item rows)`);
@@ -480,6 +497,7 @@ function render(){
   renderBranchList();
   if(view==='all') renderOverview();
   else if(view==='audit') renderAudit();
+  else if(view==='backups') renderBackups();
   else renderBranch();
 }
 
@@ -509,6 +527,7 @@ function setTabs(){
   document.getElementById('tabBranch').classList.toggle('active', view==='branch');
   document.getElementById('tabAll').classList.toggle('active', view==='all');
   document.getElementById('tabAudit').classList.toggle('active', view==='audit');
+  document.getElementById('tabBackups').classList.toggle('active', view==='backups');
 }
 
 function renderBranch(){
@@ -622,6 +641,25 @@ function makeSheet(rows, header, widths){
 const INV_HEADER = ['Branch','Item','Qty','Serial No','Asset Tag','Status','Assigned To','Purchase Date','Notes','Last Updated','Archived'];
 const INV_WIDTHS = [22,30,8,20,16,12,22,14,30,22,10];
 
+function addInventorySheets(wb, branches){
+  const inventory = [], totals = {};
+  const byBranch = branches.map(b=>{
+    let units = 0;
+    b.items.forEach(it=>{
+      const q = Number(it.qty||0);
+      units += q;
+      if(!b.archived) totals[it.name] = (totals[it.name]||0) + q;
+      inventory.push({ Branch:b.name, Item:it.name, Qty:q, 'Serial No':it.serial_no, 'Asset Tag':it.asset_tag, Status:it.status, 'Assigned To':it.assigned_to, 'Purchase Date':it.purchase_date, Notes:it.notes, 'Last Updated': it.updated_at ? fmtTs(it.updated_at) : '', Archived: b.archived ? 'Yes' : 'No' });
+    });
+    return { Branch:b.name, 'Item Types':b.items.length, 'Total Units':units, Archived: b.archived ? 'Yes' : 'No' };
+  });
+  const companyTotals = Object.keys(totals).sort().map(n=>({ Item:n, 'Total Units':totals[n] }));
+  XLSX.utils.book_append_sheet(wb, makeSheet(inventory, INV_HEADER, INV_WIDTHS), 'Inventory');
+  XLSX.utils.book_append_sheet(wb, makeSheet(byBranch, ['Branch','Item Types','Total Units','Archived'], [24,12,12,10]), 'By Branch');
+  XLSX.utils.book_append_sheet(wb, makeSheet(companyTotals, ['Item','Total Units'], [32,12]), 'Company Totals');
+  return inventory.length;
+}
+
 async function exportExcel(){
   if(typeof XLSX === 'undefined'){ alert('Excel library did not load. Open the file in a normal browser tab.'); return; }
   const btn = document.getElementById('exportBtn');
@@ -629,29 +667,13 @@ async function exportExcel(){
   try{
     await loadAllData();
     const stamp = new Date().toISOString().slice(0,10);
-    const inventory = [], totals = {};
-    const byBranch = state.branches.map(b=>{
-      let units = 0;
-      b.items.forEach(it=>{
-        const q = Number(it.qty||0);
-        units += q;
-        if(!b.archived) totals[it.name] = (totals[it.name]||0) + q;
-        inventory.push({ Branch:b.name, Item:it.name, Qty:q, 'Serial No':it.serial_no, 'Asset Tag':it.asset_tag, Status:it.status, 'Assigned To':it.assigned_to, 'Purchase Date':it.purchase_date, Notes:it.notes, 'Last Updated': it.updated_at ? fmtTs(it.updated_at) : '', Archived: b.archived ? 'Yes' : 'No' });
-      });
-      return { Branch:b.name, 'Item Types':b.items.length, 'Total Units':units, Archived: b.archived ? 'Yes' : 'No' };
-    });
-    const companyTotals = Object.keys(totals).sort().map(n=>({ Item:n, 'Total Units':totals[n] }));
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, makeSheet(inventory, INV_HEADER, INV_WIDTHS), 'Inventory');
-    XLSX.utils.book_append_sheet(wb, makeSheet(byBranch, ['Branch','Item Types','Total Units','Archived'], [24,12,12,10]), 'By Branch');
-    XLSX.utils.book_append_sheet(wb, makeSheet(companyTotals, ['Item','Total Units'], [32,12]), 'Company Totals');
-    {
-      const { data } = await sb.from('audit_log').select('*').order('ts', { ascending:false }).limit(1000);
-      const audit = (data||[]).map(e=>({ Time:fmtTs(e.ts), User:e.app_user, Action:e.action, Details:e.details }));
-      XLSX.utils.book_append_sheet(wb, makeSheet(audit, ['Time','User','Action','Details'], [22,28,16,70]), 'Audit Log (last 1000)');
-    }
+    const n = addInventorySheets(wb, state.branches);
+    const { data } = await sb.from('audit_log').select('*').order('ts', { ascending:false }).limit(1000);
+    const audit = (data||[]).map(e=>({ Time:fmtTs(e.ts), User:e.app_user, Action:e.action, Details:e.details }));
+    XLSX.utils.book_append_sheet(wb, makeSheet(audit, ['Time','User','Action','Details'], [22,28,16,70]), 'Audit Log (last 1000)');
     XLSX.writeFile(wb, `ICT-Inventory-Backup-${stamp}.xlsx`);
-    await logAudit('export', `Exported inventory to Excel (${inventory.length} item rows)`);
+    await logAudit('export', `Exported inventory to Excel (${n} item rows)`);
     refreshAudit();
   }catch(e){
     console.error(e); alert('Export failed: ' + (e.message || e));
@@ -717,6 +739,7 @@ async function importExcel(file){
     const nb = Object.keys(newBranches).length;
     if(!confirm(`Import ${rows.length} rows from "${file.name}"?\n\n• ${nb} new branch${nb===1?'':'es'}\n• ${inserts.length} new items\n• ${updates.length} existing items updated (matched by asset tag, serial no, or item name)\n${skipped ? `• ${skipped} rows skipped (missing Branch/Item or invalid Qty)\n` : ''}\nThis cannot be undone — tip: Export Excel first.`)) return;
 
+    if(!(await takeSnapshot('pre-import', false))) return;
     if(nb){
       const { data, error } = await sb.from('branches').insert(Object.values(newBranches).map(n=>({ name:n }))).select();
       if(error) throw error;
@@ -752,6 +775,107 @@ document.getElementById('templateBtn').onclick = downloadTemplate;
 document.getElementById('importBtn').onclick = ()=>document.getElementById('importFile').click();
 document.getElementById('importFile').onchange = (e)=>{ const f = e.target.files[0]; e.target.value = ''; importExcel(f); };
 
+/* ---------- Backups (daily snapshots) ---------- */
+let backupList = [];
+const KIND_LABEL = { auto:'Daily (auto)', manual:'Manual', 'pre-import':'Before import', 'pre-delete':'Before delete', 'pre-restore':'Before restore' };
+
+async function takeSnapshot(kind, silent){
+  const fail = (msg)=>{ if(!silent) alert('Could not save a safety backup: '+msg+'\nThe action was cancelled.'); else console.warn('snapshot failed', msg); return false; };
+  const [{ data: br, error: be }, { data: it, error: ie }] = await Promise.all([ fetchAll('branches'), fetchAll('items') ]);
+  if(be || ie) return fail((be||ie).message);
+  const { error } = await sb.from('backups').insert({ kind, created_by:currentUser, branch_count:br.length, item_count:it.length, data:{ version:1, branches:br, items:it } });
+  if(error) return fail(error.message);
+  return true;
+}
+
+async function autoSnapshot(){
+  try{
+    const start = new Date(); start.setHours(0,0,0,0);
+    const { data, error } = await sb.from('backups').select('id').gte('created_at', start.toISOString()).limit(1);
+    if(error){ console.warn('backups not available', error.message); return; }
+    if(!data.length) await takeSnapshot('auto', true);
+    const cutoff = new Date(Date.now() - 30*24*60*60*1000).toISOString();
+    await sb.from('backups').delete().lt('created_at', cutoff);
+    if(view==='backups') refreshBackups();
+  }catch(e){ console.warn('auto snapshot failed', e); }
+}
+
+async function refreshBackups(){
+  const { data, error } = await sb.from('backups').select('id,created_at,kind,created_by,branch_count,item_count').order('created_at', { ascending:false }).limit(200);
+  if(error){
+    backupList = [];
+    document.getElementById('content').innerHTML = `<h2>Backups</h2><div class="archivedbanner">Could not load backups: ${escapeHtml(error.message)}. Make sure the backups SQL script has been run and you are signed in as an admin.</div>`;
+    return;
+  }
+  backupList = data || [];
+  if(view==='backups') renderBackups();
+}
+
+function renderBackups(){
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <h2>Backups</h2>
+    <div class="sub">A snapshot is saved automatically the first time an admin opens the app each day, and before every import, permanent delete and restore. The last 30 days are kept.</div>
+    <div style="margin-bottom:16px"><button class="primary-btn" id="snapNowBtn">Save snapshot now</button></div>
+    ${backupList.length===0 ? '<div class="empty">No snapshots yet.</div>' : `
+    <table class="audittable">
+      <thead><tr><th>Saved</th><th>Type</th><th>By</th><th style="text-align:right">Branches</th><th style="text-align:right">Items</th><th></th></tr></thead>
+      <tbody>${backupList.map(r=>`<tr>
+        <td class="ts">${escapeHtml(fmtTs(r.created_at))}</td>
+        <td>${escapeHtml(KIND_LABEL[r.kind]||r.kind)}</td>
+        <td class="user">${escapeHtml(r.created_by||'')}</td>
+        <td class="qty">${r.branch_count}</td><td class="qty">${r.item_count}</td>
+        <td style="text-align:right;white-space:nowrap"><button class="ghostbtn" data-a="dl" data-id="${r.id}">⬇ Excel</button><button class="ghostbtn" data-a="restore" data-id="${r.id}">Restore</button><button class="del" data-a="rm" data-id="${r.id}">delete</button></td>
+      </tr>`).join('')}</tbody>
+    </table>`}
+  `;
+  document.getElementById('snapNowBtn').onclick = async ()=>{
+    const btn = document.getElementById('snapNowBtn'); btn.disabled = true; btn.textContent = 'Saving…';
+    const ok = await takeSnapshot('manual', false);
+    if(ok) await logAudit('backup_snapshot', 'Saved a manual snapshot');
+    refreshBackups(); refreshAudit();
+  };
+  content.querySelectorAll('[data-a]').forEach(el=>{
+    const id = Number(el.dataset.id);
+    el.onclick = ()=>{ if(el.dataset.a==='dl') downloadBackup(id); else if(el.dataset.a==='restore') restoreBackupById(id); else deleteBackup(id); };
+  });
+}
+
+async function downloadBackup(id){
+  if(typeof XLSX === 'undefined'){ alert('Excel library did not load.'); return; }
+  const { data, error } = await sb.from('backups').select('created_at,data').eq('id', id).single();
+  if(error){ alert('Could not load that snapshot: '+error.message); return; }
+  const wb = XLSX.utils.book_new();
+  addInventorySheets(wb, nestData(data.data.branches, data.data.items));
+  const d = new Date(data.created_at), p = n=>String(n).padStart(2,'0');
+  XLSX.writeFile(wb, `ICT-Inventory-Snapshot-${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.xlsx`);
+}
+
+async function restoreBackupById(id){
+  const row = backupList.find(x=>x.id===id); if(!row) return;
+  const when = fmtTs(row.created_at);
+  const typed = prompt(`RESTORE the snapshot from ${when}?\n\nThis replaces ALL current branches and items with the snapshot (${row.branch_count} branches, ${row.item_count} items). Anything added or changed since then will be lost. A safety backup of the current data is saved first.\n\nType RESTORE to continue:`);
+  if(typed !== 'RESTORE') return;
+  if(!(await takeSnapshot('pre-restore', false))) return;
+  const { error } = await sb.rpc('restore_backup', { p_id:id });
+  if(error){ alert('Restore failed: '+error.message); return; }
+  await logAudit('restore_backup', `Restored snapshot from ${when} (${row.branch_count} branches, ${row.item_count} items)`);
+  selected = null; showArchived = false;
+  await refreshBackups(); refreshAudit(); loadAllData();
+  alert('Restore complete.');
+}
+
+async function deleteBackup(id){
+  const row = backupList.find(x=>x.id===id); if(!row) return;
+  if(!confirm(`Delete the snapshot from ${fmtTs(row.created_at)}? This cannot be undone.`)) return;
+  const { error } = await sb.from('backups').delete().eq('id', id);
+  if(error){ alert('Delete failed: '+error.message); return; }
+  await logAudit('delete_backup', `Deleted snapshot from ${fmtTs(row.created_at)}`);
+  refreshBackups(); refreshAudit();
+}
+
+document.getElementById('tabBackups').onclick = ()=>{ view='backups'; setTabs(); renderBranchList(); refreshBackups(); };
+
 /* ---------- tabs / search / add branch ---------- */
 document.getElementById('tabBranch').onclick = ()=>{ view='branch'; setTabs(); render(); };
 document.getElementById('tabAll').onclick = ()=>{ view='all'; setTabs(); render(); };
@@ -775,6 +899,7 @@ async function boot(){
   render();
   await loadAllData();
   await refreshAudit();
+  if(isAdmin()) autoSnapshot();
   if(!subscribed){
     sb.channel('inventory-realtime')
       .on('postgres_changes', { event:'*', schema:'public', table:'items' }, scheduleReload)
