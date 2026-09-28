@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>inv.count</title>
+<title>ICT Inventory Ledger</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -161,10 +161,10 @@ td.actions{width:80px; text-align:right;}
 
 <div id="loginOverlay">
   <div class="loginbox">
-    <h2>ICT Inventory Count</h2>
+    <h2>ICT Inventory Ledger</h2>
     <div class="sub">Sign in to continue</div>
-    <label for="loginUser">Username</label>
-    <input id="loginUser" autocomplete="username" placeholder="Username">
+    <label for="loginUser">Email or username</label>
+    <input id="loginUser" autocomplete="username" placeholder="Email or username">
     <label for="loginPass">Password</label>
     <input id="loginPass" type="password" autocomplete="current-password" placeholder="Password">
     <button id="loginBtn">Sign in</button>
@@ -173,7 +173,7 @@ td.actions{width:80px; text-align:right;}
 </div>
 
 <header>
-  <h1>ICT Inventory Count</h1>
+  <h1>ICT Inventory Ledger</h1>
   <span class="stamp mono" id="branchCountBadge">— BRANCHES</span>
   <div class="tabs">
     <div class="tab active" id="tabBranch">By Branch</div>
@@ -200,45 +200,50 @@ const SUPABASE_URL = 'https://maflvhksxdcbgqmogfee.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hZmx2aGtzeGRjYmdxbW9nZmVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNzE2NzEsImV4cCI6MjEwNTc0NzY3MX0.qHOiq7ezHnN1--DAtKBAwy7vS0LbArBjO7KP9PJj2ys';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* ---------- auth (client-side gate; real access control lives in Supabase RLS) ---------- */
-const AUTH_USER = 'admin';
-const AUTH_PASS = 'Olympus101';
+/* ---------- auth (Supabase Auth) ---------- */
+const EMAIL_DOMAIN = '@ict.local';
 let currentUser = null;
-
-function checkSession(){ try{ return sessionStorage.getItem('ictInvUser'); }catch(e){ return null; } }
-function setSession(u){ try{ sessionStorage.setItem('ictInvUser', u); }catch(e){} }
-function clearSession(){ try{ sessionStorage.removeItem('ictInvUser'); }catch(e){} }
+let currentRole = 'staff';
+function isAdmin(){ return currentRole === 'admin'; }
 
 function showLogin(){
   document.getElementById('loginOverlay').style.display = 'flex';
-  document.getElementById('loginErr').textContent = '';
-  document.getElementById('loginUser').value = '';
   document.getElementById('loginPass').value = '';
   setTimeout(()=>document.getElementById('loginUser').focus(), 0);
 }
 function hideLogin(){ document.getElementById('loginOverlay').style.display = 'none'; }
 
+function applySession(user){
+  currentUser = user.email;
+  currentRole = (user.app_metadata && user.app_metadata.role) || 'staff';
+  document.getElementById('userLabel').textContent = currentUser + (isAdmin() ? ' (admin)' : '');
+  document.getElementById('tabAudit').style.display = isAdmin() ? '' : 'none';
+}
+
 async function attemptLogin(){
-  const u = document.getElementById('loginUser').value.trim();
+  const err = document.getElementById('loginErr');
+  let u = document.getElementById('loginUser').value.trim();
   const p = document.getElementById('loginPass').value;
-  if(u === AUTH_USER && p === AUTH_PASS){
-    currentUser = u;
-    setSession(u);
-    hideLogin();
-    document.getElementById('userLabel').textContent = currentUser;
-    await logAudit('login', `${currentUser} signed in`);
-    boot();
-  } else {
-    document.getElementById('loginErr').textContent = 'Incorrect username or password.';
+  if(!u || !p){ err.textContent = 'Enter your username/email and password.'; return; }
+  if(!u.includes('@')) u = u.toLowerCase() + EMAIL_DOMAIN;
+  err.textContent = 'Signing in…';
+  const { data, error } = await sb.auth.signInWithPassword({ email:u, password:p });
+  if(error){
+    err.textContent = error.message === 'Invalid login credentials' ? 'Incorrect username/email or password.' : error.message;
+    return;
   }
+  err.textContent = '';
+  applySession(data.user);
+  hideLogin();
+  await logAudit('login', `${currentUser} signed in`);
+  boot();
 }
 document.getElementById('loginBtn').onclick = attemptLogin;
 document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') attemptLogin(); });
 document.getElementById('loginUser').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('loginPass').focus(); });
 document.getElementById('logoutBtn').onclick = async ()=>{
   await logAudit('logout', `${currentUser} signed out`);
-  clearSession();
-  currentUser = null;
+  await sb.auth.signOut();
   location.reload();
 };
 
@@ -314,6 +319,7 @@ async function renameBranch(b){
 }
 
 async function deleteBranch(b){
+  if(!isAdmin()) return;
   const itemCount = b.items.reduce((s,it)=>s+Number(it.qty||0),0);
   const msg = itemCount>0
     ? `Delete branch "${b.name}"? It has ${itemCount} units logged — this cannot be undone.`
@@ -401,10 +407,10 @@ function renderBranchList(){
     const total = b.items.reduce((s,it)=>s+Number(it.qty||0),0);
     const row = document.createElement('div');
     row.className = 'branchrow' + (b.id===selected?' active':'');
-    row.innerHTML = `<span class="bname">${escapeHtml(b.name)}</span><span class="rowbtns"><button class="editbtn" data-a="edit" title="Rename">✎</button><button class="delbtn" data-a="delbranch" title="Delete branch">🗑</button><span class="cnt">${total}</span></span>`;
+    row.innerHTML = `<span class="bname">${escapeHtml(b.name)}</span><span class="rowbtns"><button class="editbtn" data-a="edit" title="Rename">✎</button>${isAdmin()?'<button class="delbtn" data-a="delbranch" title="Delete branch">🗑</button>':''}<span class="cnt">${total}</span></span>`;
     row.querySelector('.bname').onclick = ()=>{ selected=b.id; view='branch'; setTabs(); render(); };
     row.querySelector('[data-a=edit]').onclick = (e)=>{ e.stopPropagation(); renameBranch(b); };
-    row.querySelector('[data-a=delbranch]').onclick = (e)=>{ e.stopPropagation(); deleteBranch(b); };
+    const dbtn = row.querySelector('[data-a=delbranch]'); if(dbtn) dbtn.onclick = (e)=>{ e.stopPropagation(); deleteBranch(b); };
     list.appendChild(row);
   });
 }
@@ -422,7 +428,7 @@ function renderBranch(){
   selected = b.id;
   const total = b.items.reduce((s,it)=>s+Number(it.qty||0),0);
   content.innerHTML = `
-    <h2>${escapeHtml(b.name)} <button class="editbtn" id="editBranchName" title="Rename branch">✎</button><button class="delbtn" id="deleteBranchBtn" title="Delete branch">🗑</button></h2>
+    <h2>${escapeHtml(b.name)} <button class="editbtn" id="editBranchName" title="Rename branch">✎</button>${isAdmin()?'<button class="delbtn" id="deleteBranchBtn" title="Delete branch">🗑</button>':''}</h2>
     <div class="sub">ICT inventory for this branch</div>
     <div class="addrow">
       <input name="iname" placeholder="Item name (e.g. Laptop)">
@@ -437,7 +443,7 @@ function renderBranch(){
     <div class="total">Total units in ${escapeHtml(b.name)}: <b>${total}</b></div>
   `;
   document.getElementById('editBranchName').onclick = ()=>renameBranch(b);
-  document.getElementById('deleteBranchBtn').onclick = ()=>deleteBranch(b);
+  const dbb = document.getElementById('deleteBranchBtn'); if(dbb) dbb.onclick = ()=>deleteBranch(b);
   const tbody = document.getElementById('itemsBody');
   b.items.forEach(it=>{
     const tr = document.createElement('tr');
@@ -517,16 +523,15 @@ async function boot(){
   }
 }
 
-function init(){
+async function init(){
   if(typeof supabase === 'undefined'){
     showLogin();
-    document.getElementById('loginErr').textContent = 'Could not load the database library (this preview sandbox may be blocking it) — try opening the downloaded file directly in a browser tab instead.';
+    document.getElementById('loginErr').textContent = 'Could not load the database library — open the downloaded file directly in a browser tab.';
     return;
   }
-  const existing = checkSession();
-  if(existing === AUTH_USER){
-    currentUser = existing;
-    document.getElementById('userLabel').textContent = currentUser;
+  const { data } = await sb.auth.getSession();
+  if(data && data.session){
+    applySession(data.session.user);
     hideLogin();
     boot();
   } else {
