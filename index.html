@@ -353,6 +353,23 @@ header h1 i{color:var(--accent);margin-right:2px;}
 .total b,.overview-row .n{color:var(--accent);}
 .loginbox button{background:var(--accent);}
 ::selection{background:var(--accent);color:#fff;}
+/* ===== scan + print labels ===== */
+#qr-reader{background:#000;}
+#qr-reader video{width:100%!important;border-radius:6px;}
+#printLabels{display:none;}
+@media print{
+  body *{visibility:hidden;}
+  #printLabels, #printLabels *{visibility:visible;}
+  #printLabels{
+    display:grid; grid-template-columns:repeat(3, 1fr); gap:6mm;
+    position:absolute; top:0; left:0; width:100%; padding:8mm; background:#fff;
+  }
+  .label{border:1px dashed #999; border-radius:2mm; padding:4mm; text-align:center; break-inside:avoid; color:#000;}
+  .label img{width:26mm; height:26mm;}
+  .label .lname{font-size:10pt; font-weight:600; margin-top:2mm; color:#000;}
+  .label .lbranch{font-size:7.5pt; color:#555;}
+  .label .ltag{font-size:7.5pt; color:#555; margin-top:1mm;}
+}
 </style>
 </head>
 <body>
@@ -371,6 +388,7 @@ header h1 i{color:var(--accent);margin-right:2px;}
 </div>
 
 <div id="modalOverlay" class="modal"></div>
+<div id="printLabels"></div>
 
 <div id="railBackdrop"></div>
 <div id="navBackdrop"></div>
@@ -387,6 +405,7 @@ header h1 i{color:var(--accent);margin-right:2px;}
       <div class="tab" id="tabOnLoan">On Loan</div>
     </div>
     <div class="hdr-actions">
+    <button class="exportbtn" id="scanBtn" title="Scan an item's QR label"><i class="fa-solid fa-qrcode"></i><span class="hide-sm"> Scan</span></button>
     <button class="exportbtn" id="exportBtn" title="Download a full Excel backup"><i class="fa-solid fa-file-arrow-down"></i><span class="hide-sm"> Export Excel</span></button>
     <button class="exportbtn" id="importBtn" title="Import items from Excel (admin)"><i class="fa-solid fa-file-arrow-up"></i><span class="hide-sm"> Import Excel</span></button>
     <button class="logoutbtn" id="templateBtn" title="Download a blank import template"><i class="fa-solid fa-file-lines"></i><span class="hide-sm"> Template</span></button>
@@ -413,6 +432,8 @@ header h1 i{color:var(--accent);margin-right:2px;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 const SUPABASE_URL = 'https://maflvhksxdcbgqmogfee.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hZmx2aGtzeGRjYmdxbW9nZmVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNzE2NzEsImV4cCI6MjEwNTc0NzY3MX0.qHOiq7ezHnN1--DAtKBAwy7vS0LbArBjO7KP9PJj2ys';
@@ -680,6 +701,68 @@ async function deleteItem(b, it){
   refreshAudit(); loadAllData();
 }
 
+/* ---------- QR labels: print + scan ---------- */
+const qrCode = it => `ICTITEM:${it.id}`;
+
+async function printLabels(b){
+  if(typeof QRCode === 'undefined'){ alert('QR code library did not load — check your connection and try again.'); return; }
+  const box = document.getElementById('printLabels');
+  box.innerHTML = '<div class="label" style="border:none">Generating…</div>';
+  const cells = await Promise.all(b.items.map(async it=>{
+    const dataUrl = await QRCode.toDataURL(qrCode(it), { width:220, margin:1 });
+    const sub = [it.asset_tag && `Tag ${it.asset_tag}`, it.serial_no && `S/N ${it.serial_no}`].filter(Boolean).join(' · ');
+    return `<div class="label"><img src="${dataUrl}" alt=""><div class="lname">${escapeHtml(it.name)}</div><div class="lbranch">${escapeHtml(b.name)}</div>${sub?`<div class="ltag">${escapeHtml(sub)}</div>`:''}</div>`;
+  }));
+  box.innerHTML = cells.join('');
+  requestAnimationFrame(()=>window.print());
+}
+
+let scanner = null;
+function openScanModal(){
+  const ov = document.getElementById('modalOverlay');
+  ov.innerHTML = `<div class="modalbox">
+    <h3>Scan an item's label</h3>
+    <div id="qr-reader" style="width:100%;border-radius:6px;overflow:hidden"></div>
+    <div class="loginerr" id="scan_err"></div>
+    <div class="mactions"><button class="ghostbtn" id="scan_cancel">Cancel</button></div>
+  </div>`;
+  ov.style.display = 'flex';
+  ov.onclick = e=>{ if(e.target===ov) closeScanModal(); };
+  document.getElementById('scan_cancel').onclick = closeScanModal;
+  if(typeof Html5Qrcode === 'undefined'){ document.getElementById('scan_err').textContent = 'Scanner library did not load — check your connection and try again.'; return; }
+  scanner = new Html5Qrcode('qr-reader');
+  scanner.start({ facingMode:'environment' }, { fps:10, qrbox:220 }, onScanSuccess, ()=>{})
+    .catch(err=>{ document.getElementById('scan_err').textContent = 'Could not open the camera: '+(err.message||err); });
+}
+function closeScanModal(){
+  if(scanner){ scanner.stop().then(()=>scanner.clear()).catch(()=>{}); scanner = null; }
+  closeModal();
+}
+function onScanSuccess(text){
+  closeScanModal();
+  const m = /^ICTITEM:(\d+)$/.exec(text.trim());
+  if(m){
+    const id = Number(m[1]);
+    for(const b of state.branches){
+      const it = b.items.find(x=>x.id===id);
+      if(it){
+        selected=b.id; showArchived=!!b.archived; view='branch'; setTabs(); render();
+        if(b.archived) alert(`Found "${it.name}" in ${b.name} — this branch is archived (read-only).`);
+        else openItemModal(b, it);
+        return;
+      }
+    }
+    alert("That label's item wasn't found — it may have been deleted.");
+    return;
+  }
+  // unrecognized code: treat as a new asset in the current branch, prefill serial
+  const b = state.branches.find(x=>x.id===selected) || state.branches.find(x=>!x.archived);
+  if(!b){ alert('Add a branch first.'); return; }
+  selected = b.id; view='branch'; setTabs(); render();
+  openItemModal(b, null);
+  const s = document.getElementById('m_serial'); if(s) s.value = text.trim();
+}
+
 /* ---------- render ---------- */
 function render(){
   renderBranchList();
@@ -733,7 +816,7 @@ function renderBranch(){
   const total = b.items.reduce((s,it)=>s+Number(it.qty||0),0);
   const adminBtns = !isAdmin() ? '' : (ro
     ? '<button class="ghostbtn" id="restoreBtn"><i class="fa-solid fa-rotate-left"></i> Restore</button><button class="ghostbtn dangerbtn" id="purgeBtn"><i class="fa-solid fa-trash"></i> Delete permanently</button>'
-    : '<button class="ghostbtn" id="archiveBtn"><i class="fa-solid fa-box-archive"></i> Archive</button>');
+    : `<button class="ghostbtn" id="archiveBtn"><i class="fa-solid fa-box-archive"></i> Archive</button>${b.items.length ? '<button class="ghostbtn" id="printLabelsBtn"><i class="fa-solid fa-tags"></i> Print labels</button>' : ''}`);
   content.innerHTML = `
     <h2>${escapeHtml(b.name)} <button class="editbtn" id="editBranchName" title="Rename branch"><i class="fa-solid fa-pen"></i></button>${adminBtns}</h2>
     <div class="sub">ICT inventory for this branch</div>
@@ -754,6 +837,7 @@ function renderBranch(){
   document.getElementById('editBranchName').onclick = ()=>renameBranch(b);
   const on = (id, fn)=>{ const el = document.getElementById(id); if(el) el.onclick = fn; };
   on('archiveBtn', ()=>archiveBranch(b)); on('restoreBtn', ()=>restoreBranch(b)); on('purgeBtn', ()=>deleteBranch(b));
+  on('printLabelsBtn', ()=>printLabels(b));
   on('addDetailBtn', ()=>openItemModal(b, null));
   on('checkoutPickBtn', ()=>openCheckoutPicker(b));
   const tbody = document.getElementById('itemsBody');
@@ -1131,6 +1215,7 @@ async function importExcel(file){
   }
 }
 
+document.getElementById('scanBtn').onclick = openScanModal;
 document.getElementById('exportBtn').onclick = exportExcel;
 document.getElementById('templateBtn').onclick = downloadTemplate;
 document.getElementById('importBtn').onclick = ()=>document.getElementById('importFile').click();
