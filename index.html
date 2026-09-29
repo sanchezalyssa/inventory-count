@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ICT Inventory Ledger</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#14181c" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f3f1ea" media="(prefers-color-scheme: light)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ICT Inventory">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -176,6 +185,71 @@ td.actions{width:80px; text-align:right;}
 .chip{padding:5px 11px;font-size:12.5px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:14px;cursor:pointer;font-family:inherit;}
 .chip.on{border-color:var(--accent);color:var(--accent);font-weight:600;}
 @media (max-width:640px){.grid2{grid-template-columns:1fr;}}
+
+/* ===== mobile + PWA ===== */
+html{-webkit-text-size-adjust:100%;}
+button,.tab,.branchrow,.chip{touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
+.hdr-actions{display:contents;}
+.railhead,.branchbar,#railBackdrop{display:none;}
+@media (max-width:768px){
+  body{min-height:100dvh;}
+  header{padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top,0px));gap:8px 10px;align-items:center;}
+  header h1{order:1;font-size:15px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  header .stamp{display:none;}
+  .userbadge{order:2;font-size:12px;gap:8px;}
+  .userbadge b{max-width:105px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom;}
+  .hide-sm{display:none;}
+  .tabs{order:3;width:100%;margin-left:0;gap:6px;overflow-x:auto;}
+  .tab{flex:1 0 auto;text-align:center;padding:10px 8px;white-space:nowrap;}
+  .hdr-actions{display:flex;order:4;width:100%;gap:8px;overflow-x:auto;padding-bottom:2px;}
+  .hdr-actions>*{flex:0 0 auto;}
+  .exportbtn,.logoutbtn{min-height:38px;padding:8px 12px;}
+  .branchbar{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--surface-2);border-bottom:1px solid var(--border);font-size:14.5px;cursor:pointer;}
+  .branchbar .chg{color:var(--accent);font-size:13px;font-weight:600;}
+  .branchbar.off{display:none;}
+  /* branch list becomes a slide-in drawer */
+  .rail{position:fixed;left:0;top:0;bottom:0;width:86%;max-width:330px;z-index:70;transform:translateX(-104%);transition:transform .22s ease;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);}
+  .rail.open{transform:none;box-shadow:6px 0 28px rgba(0,0,0,.5);}
+  #railBackdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:65;opacity:0;pointer-events:none;transition:opacity .2s;}
+  #railBackdrop.open{opacity:1;pointer-events:auto;}
+  .railhead{display:flex;justify-content:space-between;align-items:center;padding:14px 14px 4px;font-weight:600;font-size:16px;}
+  .railhead button{background:none;border:none;color:var(--text-dim);font-size:20px;cursor:pointer;padding:4px 8px;}
+  .rail input{font-size:16px;padding:12px;}
+  .branchrow{padding:15px 14px;font-size:15.5px;}
+  .branchrow.active{padding-left:11px;}
+  .editbtn,.delbtn{padding:8px;font-size:17px;}
+  .addbranch{padding:15px 14px;font-size:14.5px;}
+  /* content */
+  .content{padding:16px 14px calc(24px + env(safe-area-inset-bottom,0px));max-width:none;}
+  .content h2{font-size:19px;flex-wrap:wrap;}
+  .addrow input,.addrow button{font-size:16px;min-height:46px;}
+  .addrow input[name=iname]{flex:1 1 100%;}
+  .addrow input[name=iqty]{flex:0 0 96px;}
+  .addrow button{flex:1;}
+  .ghostbtn{min-height:40px;padding:8px 12px;}
+  .overview-row{padding:13px 4px;}
+  /* items table -> cards */
+  .itemtable,.itemtable tbody{display:block;}
+  .itemtable thead{display:none;}
+  .itemtable tr{display:grid;grid-template-columns:1fr auto auto;grid-template-areas:"name name name" "qty act del";align-items:center;gap:8px 10px;padding:13px 2px;border-bottom:1px solid var(--border);}
+  .itemtable td{border:none;padding:0;width:auto;}
+  .itemtable td:nth-child(1){grid-area:name;font-size:15.5px;}
+  .itemtable td.qty{grid-area:qty;text-align:left;font-size:21px;width:auto;}
+  .itemtable td.actions:nth-child(3){grid-area:act;}
+  .itemtable td.actions:nth-child(4){grid-area:del;}
+  .qtybtn{width:42px;height:42px;font-size:22px;}
+  .del{padding:12px 6px;font-size:14px;}
+  /* wide tables scroll sideways */
+  .audittable{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .chips{flex-wrap:nowrap;overflow-x:auto;padding-bottom:6px;}
+  .chip{flex:0 0 auto;padding:9px 13px;}
+  /* modal = bottom sheet */
+  .modal{padding:0;align-items:flex-end;}
+  .modalbox{max-width:none;border-radius:14px 14px 0 0;max-height:94dvh;padding-bottom:calc(22px + env(safe-area-inset-bottom,0px));}
+  .modalbox input,.modalbox select,.modalbox textarea,.loginbox input{font-size:16px;}
+  .modalbox input,.modalbox select{min-height:44px;}
+  .loginbox button,.mactions button{min-height:46px;font-size:15px;}
+}
 </style>
 </head>
 <body>
@@ -195,6 +269,7 @@ td.actions{width:80px; text-align:right;}
 
 <div id="modalOverlay" class="modal"></div>
 
+<div id="railBackdrop"></div>
 <header>
   <h1>ICT Inventory Ledger</h1>
   <span class="stamp mono" id="branchCountBadge">— BRANCHES</span>
@@ -203,18 +278,24 @@ td.actions{width:80px; text-align:right;}
     <div class="tab" id="tabAll">All Items</div>
     <div class="tab" id="tabAudit">Audit Log</div>
     <div class="tab" id="tabBackups">Backups</div>
+    <div class="tab" id="tabOnLoan">On Loan</div>
   </div>
+  <div class="hdr-actions">
   <button class="exportbtn" id="exportBtn" title="Download a full Excel backup">⬇ Export Excel</button>
   <button class="exportbtn" id="importBtn" title="Import items from Excel (admin)">⬆ Import Excel</button>
   <button class="logoutbtn" id="templateBtn" title="Download a blank import template">Template</button>
   <input type="file" id="importFile" accept=".xlsx,.xls,.csv" hidden>
+  <button class="exportbtn" id="installBtn" style="display:none">📲 Install app</button>
+  </div>
   <div class="userbadge">
-    <span>Signed in as <b id="userLabel">—</b></span>
+    <span><span class="hide-sm">Signed in as </span><b id="userLabel">—</b></span>
     <button class="logoutbtn" id="logoutBtn">Log out</button>
   </div>
 </header>
+<div class="branchbar" id="branchBar"><span>📍 <b id="branchBarName">Select branch</b></span><span class="chg">Change ▾</span></div>
 <main>
   <div class="rail">
+    <div class="railhead"><span>Branches</span><button id="railClose" aria-label="Close">✕</button></div>
     <input id="branchSearch" placeholder="Search branch…">
     <div class="branchlist" id="branchList"></div>
     <div class="addbranch" id="addBranch">+ Add branch</div>
@@ -359,7 +440,7 @@ async function loadAllData(){
 }
 
 /* ---------- mutations ---------- */
-const STATUSES = ['In use','In stock','For repair','Retired','Lost'];
+const STATUSES = ['In use','In stock','Checked out','For repair','Retired','Lost'];
 const ITEM_FIELDS = [['name','Name'],['qty','Qty'],['serial_no','Serial no.'],['asset_tag','Asset tag'],['status','Status'],['assigned_to','Assigned to'],['purchase_date','Purchase date'],['notes','Notes']];
 
 async function renameBranch(b){
@@ -498,6 +579,7 @@ function render(){
   if(view==='all') renderOverview();
   else if(view==='audit') renderAudit();
   else if(view==='backups') renderBackups();
+  else if(view==='onloan') renderOnLoan();
   else renderBranch();
 }
 
@@ -513,7 +595,7 @@ function renderBranchList(){
       ? '<button class="editbtn" data-a="restore" title="Restore branch">↩</button>'
       : '<button class="editbtn" data-a="archive" title="Archive branch">📦</button>');
     row.innerHTML = `<span class="bname">${escapeHtml(b.name)}</span><span class="rowbtns"><button class="editbtn" data-a="edit" title="Rename">✎</button>${adminBtn}<span class="cnt">${total}</span></span>`;
-    row.querySelector('.bname').onclick = ()=>{ selected=b.id; view='branch'; setTabs(); render(); };
+    row.onclick = ()=>{ selected=b.id; view='branch'; setTabs(); closeRail(); render(); };
     row.querySelector('[data-a=edit]').onclick = (e)=>{ e.stopPropagation(); renameBranch(b); };
     const ab = row.querySelector('[data-a=archive]'); if(ab) ab.onclick = (e)=>{ e.stopPropagation(); archiveBranch(b); };
     const rb = row.querySelector('[data-a=restore]'); if(rb) rb.onclick = (e)=>{ e.stopPropagation(); restoreBranch(b); };
@@ -521,6 +603,8 @@ function renderBranchList(){
   });
   const arch = state.branches.filter(b=>b.archived).length;
   document.getElementById('toggleArchived').textContent = showArchived ? '← Back to active branches' : (arch ? `Show archived (${arch})` : 'No archived branches');
+  const cur = state.branches.find(x=>x.id===selected), bn = document.getElementById('branchBarName');
+  if(bn) bn.textContent = cur ? cur.name + (cur.archived ? ' (archived)' : '') : 'Select branch';
 }
 
 function setTabs(){
@@ -528,6 +612,8 @@ function setTabs(){
   document.getElementById('tabAll').classList.toggle('active', view==='all');
   document.getElementById('tabAudit').classList.toggle('active', view==='audit');
   document.getElementById('tabBackups').classList.toggle('active', view==='backups');
+  document.getElementById('tabOnLoan').classList.toggle('active', view==='onloan');
+  document.getElementById('branchBar').classList.toggle('off', view!=='branch');
 }
 
 function renderBranch(){
@@ -550,8 +636,8 @@ function renderBranch(){
       <input name="iqty" type="number" min="1" value="1" placeholder="Qty">
       <button id="addItemBtn">Add item</button>
     </div>
-    <div style="margin:-8px 0 16px"><button class="ghostbtn" id="addDetailBtn" style="margin-left:0">+ Add asset with details (serial, tag, status…)</button></div>`}
-    <table>
+    <div style="margin:-8px 0 16px"><button class="ghostbtn" id="addDetailBtn" style="margin-left:0">+ Add asset with details (serial, tag, status…)</button><button class="ghostbtn" id="checkoutPickBtn">↗ Check out an asset</button></div>`}
+    <table class="itemtable">
       <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th></th><th></th></tr></thead>
       <tbody id="itemsBody"></tbody>
     </table>
@@ -562,16 +648,25 @@ function renderBranch(){
   const on = (id, fn)=>{ const el = document.getElementById(id); if(el) el.onclick = fn; };
   on('archiveBtn', ()=>archiveBranch(b)); on('restoreBtn', ()=>restoreBranch(b)); on('purgeBtn', ()=>deleteBranch(b));
   on('addDetailBtn', ()=>openItemModal(b, null));
+  on('checkoutPickBtn', ()=>openCheckoutPicker(b));
   const tbody = document.getElementById('itemsBody');
   b.items.forEach(it=>{
     const meta = [it.serial_no && `S/N ${it.serial_no}`, it.asset_tag && `Tag ${it.asset_tag}`, it.assigned_to && `Assigned: ${it.assigned_to}`].filter(Boolean).join(' · ');
+    const isAsset = !!(it.serial_no || it.asset_tag);
+    const checkedOut = isAsset && it.status === 'Checked out';
+    let coBtn = '';
+    if(!ro){
+      if(checkedOut) coBtn = '<button class="ghostbtn" data-a="checkin" style="margin-left:0">Check in</button>';
+      else if(Number(it.qty) > 0) coBtn = '<button class="ghostbtn" data-a="checkout" style="margin-left:0">Check out</button>';
+    }
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><span class="itemname">${escapeHtml(it.name)}</span>${ro?'':' <button class="editbtn" data-a="rename" title="Edit details">✎</button>'}${it.status && it.status!=='In use' ? `<span class="pill">${escapeHtml(it.status)}</span>` : ''}${meta ? `<div class="itemmeta">${escapeHtml(meta)}</div>` : ''}</td>
+    tr.innerHTML = `<td><span class="itemname">${escapeHtml(it.name)}</span>${ro?'':' <button class="editbtn" data-a="rename" title="Edit details">✎</button>'}${it.status && it.status!=='In use' ? `<span class="pill">${escapeHtml(it.status)}</span>` : ''}${meta ? `<div class="itemmeta">${escapeHtml(meta)}</div>` : ''}${coBtn ? `<div style="margin-top:6px">${coBtn}</div>` : ''}</td>
       <td class="qty">${it.qty}</td>
       <td class="actions">${ro?'':'<button class="qtybtn" data-a="dec">−</button> <button class="qtybtn" data-a="inc">+</button>'}</td>
       <td class="actions">${ro?'':'<button class="del" data-a="del">remove</button>'}</td>`;
     const h = (a, fn)=>{ const el = tr.querySelector(`[data-a=${a}]`); if(el) el.onclick = fn; };
     h('rename', ()=>openItemModal(b, it)); h('inc', ()=>bumpItem(b, it, 1)); h('dec', ()=>bumpItem(b, it, -1)); h('del', ()=>deleteItem(b, it));
+    h('checkout', ()=>openCheckoutModal(b, it)); h('checkin', ()=>checkInItem(b, it));
     tbody.appendChild(tr);
   });
   if(!ro){
@@ -631,6 +726,162 @@ function renderAudit(){
   `;
   content.querySelectorAll('.chip').forEach(c=>{ c.onclick = ()=>{ auditUser = c.dataset.u; renderAudit(); }; });
 }
+
+/* ---------- Check-out / Check-in (serialized assets) ---------- */
+function overdue(due){ return due && due < new Date().toISOString().slice(0,10); }
+
+function itemLabel(it){ return it.name + (it.asset_tag?' — Tag '+it.asset_tag:(it.serial_no?' — S/N '+it.serial_no:'')); }
+
+async function submitCheckout(b, it, to, due, note, qtyRaw, err){
+  if(!to){ if(err) err.textContent = 'Enter who this is being checked out to.'; return false; }
+  const isAsset = !!(it.serial_no || it.asset_tag);
+  const qty = isAsset ? 1 : Math.max(1, Number(qtyRaw)||1);
+  if(!isAsset && qty > Number(it.qty)){ if(err) err.textContent = `Only ${it.qty} on hand.`; return false; }
+  if(isAsset){
+    const { error: ue } = await sb.from('items').update({ status:'Checked out', assigned_to:to, updated_at:new Date().toISOString() }).eq('id', it.id);
+    if(ue){ if(err) err.textContent = 'Save failed: '+ue.message; return false; }
+  } else {
+    const { error: ue } = await sb.from('items').update({ qty: Number(it.qty)-qty, updated_at:new Date().toISOString() }).eq('id', it.id);
+    if(ue){ if(err) err.textContent = 'Save failed: '+ue.message; return false; }
+  }
+  const { error: ce } = await sb.from('checkouts').insert({ item_id:it.id, branch_id:b.id, branch_name:b.name, item_name:it.name, serial_no:it.serial_no||null, asset_tag:it.asset_tag||null, checked_out_to:to, checked_out_by:currentUser, due_date:due, note, qty });
+  if(ce && err) err.textContent = 'Saved item, but the loan record failed: '+ce.message;
+  closeModal();
+  const label = (qty>1?qty+' x ':'') + it.name;
+  await logAudit('checkout', `Checked out ${label}${it.asset_tag?' (tag '+it.asset_tag+')':(it.serial_no?' (S/N '+it.serial_no+')':'')} from ${b.name} to ${to}${due?', due '+due:''}`);
+  refreshAudit(); loadAllData(); if(view==='onloan') refreshLoans();
+  return true;
+}
+
+function checkoutFormHtml(b, qtyMax, isAsset){
+  return `${isAsset ? '' : `<label>Qty to check out <span class="sub2">(of ${qtyMax} on hand)</span><input id="co_qty" type="number" min="1" max="${qtyMax}" value="1"></label>`}
+    <label style="margin-top:${isAsset?0:10}px">Checked out to<input id="co_to" placeholder="Name of person"></label>
+    <div class="grid2" style="margin-top:10px">
+      <label>Due back (optional)<input id="co_due" type="date"></label>
+      <label>Branch<input value="${escapeHtml(b.name)}" disabled></label>
+    </div>
+    <label>Note (optional)<textarea id="co_note" rows="2" placeholder="Purpose, condition, etc."></textarea></label>
+    <div class="loginerr" id="co_err"></div>
+    <div class="mactions"><button class="ghostbtn" id="co_cancel">Cancel</button><button class="primary-btn" id="co_save">Check out</button></div>`;
+}
+
+function openCheckoutModal(b, it){
+  const isAsset = !!(it.serial_no || it.asset_tag);
+  const ov = document.getElementById('modalOverlay');
+  ov.innerHTML = `<div class="modalbox"><h3>Check out<span class="sub2">${escapeHtml(itemLabel(it))}</span></h3>${checkoutFormHtml(b, it.qty, isAsset)}</div>`;
+  ov.style.display = 'flex';
+  ov.onclick = e=>{ if(e.target===ov) closeModal(); };
+  document.getElementById('co_cancel').onclick = closeModal;
+  document.getElementById('co_save').onclick = ()=>{
+    const err = document.getElementById('co_err');
+    const qtyEl = document.getElementById('co_qty');
+    submitCheckout(b, it, document.getElementById('co_to').value.trim(), document.getElementById('co_due').value || null, document.getElementById('co_note').value.trim() || null, qtyEl?qtyEl.value:1, err);
+  };
+}
+
+function openCheckoutPicker(b){
+  const eligible = b.items.filter(it => (it.serial_no || it.asset_tag) ? it.status !== 'Checked out' : Number(it.qty) > 0);
+  if(!eligible.length){ alert('Nothing in this branch is currently available to check out.'); return; }
+  const ov = document.getElementById('modalOverlay');
+  const optHtml = eligible.map(it=>{
+    const isAsset = !!(it.serial_no || it.asset_tag);
+    return `<option value="${it.id}" data-max="${isAsset?1:it.qty}" data-asset="${isAsset?1:0}">${escapeHtml(itemLabel(it))}${isAsset?'':' ('+it.qty+' on hand)'}</option>`;
+  }).join('');
+  ov.innerHTML = `<div class="modalbox">
+    <h3>Check out<span class="sub2">${escapeHtml(b.name)}</span></h3>
+    <label>Which item<select id="co_item">${optHtml}</select></label>
+    <div id="co_form" style="margin-top:10px"></div>
+  </div>`;
+  ov.style.display = 'flex';
+  ov.onclick = e=>{ if(e.target===ov) closeModal(); };
+  const sel = document.getElementById('co_item');
+  const wire = ()=>{
+    const it = eligible.find(x=>x.id===sel.value);
+    document.getElementById('co_form').innerHTML = checkoutFormHtml(b, it.qty, !!(it.serial_no||it.asset_tag));
+    document.getElementById('co_cancel').onclick = closeModal;
+    document.getElementById('co_save').onclick = ()=>{
+      const err = document.getElementById('co_err');
+      const qtyEl = document.getElementById('co_qty');
+      submitCheckout(b, it, document.getElementById('co_to').value.trim(), document.getElementById('co_due').value || null, document.getElementById('co_note').value.trim() || null, qtyEl?qtyEl.value:1, err);
+    };
+  };
+  sel.onchange = wire; wire();
+}
+
+async function checkInItem(b, it){
+  const { data: rows, error: fe } = await sb.from('checkouts').select('*').eq('item_id', it.id).is('returned_at', null).order('checked_out_at', { ascending:false }).limit(1);
+  if(fe){ alert('Could not look up the loan record: '+fe.message); return; }
+  if(!rows || !rows[0]){ alert('No open loan record found for this item.'); return; }
+  checkInRecordById(rows[0]);
+}
+
+async function checkInRecordById(r){
+  const isAsset = !!(r.serial_no || r.asset_tag);
+  const label = (r.qty>1?r.qty+' x ':'') + r.item_name;
+  if(!confirm(`Check in ${label} from ${r.checked_out_to}?`)) return;
+  if(isAsset){
+    const { error: ue } = await sb.from('items').update({ status:'In use', assigned_to:null, updated_at:new Date().toISOString() }).eq('id', r.item_id);
+    if(ue){ alert('Update failed: '+ue.message); return; }
+  } else {
+    const { data: itRows } = await sb.from('items').select('id,qty').eq('id', r.item_id).limit(1);
+    if(itRows && itRows[0]){
+      await sb.from('items').update({ qty: Number(itRows[0].qty)+Number(r.qty||1), updated_at:new Date().toISOString() }).eq('id', r.item_id);
+    }
+  }
+  await sb.from('checkouts').update({ returned_at:new Date().toISOString(), returned_by:currentUser }).eq('id', r.id);
+  await logAudit('checkin', `Checked in ${label} to ${r.branch_name} (was out to ${r.checked_out_to})`);
+  refreshAudit(); loadAllData(); refreshLoans();
+}
+
+async function refreshLoans(){
+  let q = sb.from('checkouts').select('*').order('checked_out_at', { ascending:false }).limit(500);
+  if(!showReturned) q = q.is('returned_at', null);
+  const { data, error } = await q;
+  if(error){
+    loanList = [];
+    document.getElementById('content').innerHTML = `<h2>On Loan</h2><div class="archivedbanner">Could not load loan records: ${escapeHtml(error.message)}. Make sure the checkouts SQL script has been run.</div>`;
+    return;
+  }
+  loanList = data || [];
+  if(view==='onloan') renderOnLoan();
+}
+
+function renderOnLoan(){
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <h2>On Loan</h2>
+    <div class="sub">Serialized/tagged assets currently checked out, and their return history.</div>
+    <div class="chips"><button class="chip${showReturned?'':' on'}" id="loanActiveBtn">Active</button><button class="chip${showReturned?' on':''}" id="loanAllBtn">Include returned</button></div>
+    ${loanList.length===0 ? `<div class="empty">${showReturned?'No loan history yet.':'Nothing is currently checked out.'}</div>` : `
+    <table class="audittable">
+      <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th>Branch</th><th>To</th><th>By</th><th>Out</th><th>Due</th><th>Returned</th>${showReturned?'':'<th></th>'}</tr></thead>
+      <tbody>${loanList.map(r=>{
+        const od = !r.returned_at && overdue(r.due_date);
+        return `<tr>
+          <td>${escapeHtml(r.item_name)}${r.asset_tag?' <span class="itemmeta">'+escapeHtml(r.asset_tag)+'</span>':(r.serial_no?' <span class="itemmeta">S/N '+escapeHtml(r.serial_no)+'</span>':'')}</td>
+          <td class="qty">${r.qty||1}</td>
+          <td>${escapeHtml(r.branch_name)}</td>
+          <td>${escapeHtml(r.checked_out_to)}</td>
+          <td class="user">${escapeHtml(r.checked_out_by||'')}</td>
+          <td class="ts">${escapeHtml(fmtTs(r.checked_out_at))}</td>
+          <td class="ts" style="${od?'color:var(--danger);font-weight:600':''}">${r.due_date?escapeHtml(r.due_date)+(od?' (overdue)':''):'—'}</td>
+          <td class="ts">${r.returned_at?escapeHtml(fmtTs(r.returned_at)):'—'}</td>
+          ${showReturned?'':`<td style="text-align:right"><button class="ghostbtn" data-recid="${r.id}">Check in</button></td>`}
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`}
+  `;
+  document.getElementById('loanActiveBtn').onclick = ()=>{ if(showReturned){ showReturned=false; refreshLoans(); } };
+  document.getElementById('loanAllBtn').onclick = ()=>{ if(!showReturned){ showReturned=true; refreshLoans(); } };
+  content.querySelectorAll('[data-recid]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const r = loanList.find(x=>String(x.id)===btn.dataset.recid);
+      if(r) checkInRecordById(r);
+    };
+  });
+}
+
+document.getElementById('tabOnLoan').onclick = ()=>{ view='onloan'; setTabs(); renderBranchList(); refreshLoans(); };
 
 /* ---------- Excel export / import ---------- */
 function makeSheet(rows, header, widths){
@@ -893,7 +1144,33 @@ document.getElementById('toggleArchived').onclick = ()=>{
 let rtTimer = null;
 function scheduleReload(){ clearTimeout(rtTimer); rtTimer = setTimeout(loadAllData, 300); }
 
+/* ---------- mobile drawer, install prompt, offline ---------- */
+function openRail(){ document.querySelector('.rail').classList.add('open'); document.getElementById('railBackdrop').classList.add('open'); }
+function closeRail(){ document.querySelector('.rail').classList.remove('open'); document.getElementById('railBackdrop').classList.remove('open'); }
+document.getElementById('branchBar').onclick = openRail;
+document.getElementById('railBackdrop').onclick = closeRail;
+document.getElementById('railClose').onclick = closeRail;
+
+let deferredInstall = null;
+const installBtn = document.getElementById('installBtn');
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); deferredInstall = e; if(!isStandalone) installBtn.style.display = ''; });
+window.addEventListener('appinstalled', ()=>{ installBtn.style.display = 'none'; deferredInstall = null; });
+if(!isStandalone && /iphone|ipad|ipod/i.test(navigator.userAgent)) installBtn.style.display = '';
+installBtn.onclick = async ()=>{
+  if(deferredInstall){ deferredInstall.prompt(); await deferredInstall.userChoice; deferredInstall = null; installBtn.style.display = 'none'; }
+  else alert('To install on iPhone/iPad: tap the Share button in Safari, then "Add to Home Screen".');
+};
+
+window.addEventListener('offline', ()=>showBanner('You are offline — changes cannot be saved until you reconnect.'));
+window.addEventListener('online', ()=>{ showBanner(null); if(currentUser) loadAllData(); });
+
+if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
+  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+}
+
 /* ---------- boot ---------- */
+let loanList = []; let showReturned = false;
 let subscribed = false;
 async function boot(){
   render();
