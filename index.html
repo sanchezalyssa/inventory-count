@@ -250,6 +250,51 @@ button,.tab,.branchrow,.chip{touch-action:manipulation;-webkit-tap-highlight-col
   .modalbox input,.modalbox select{min-height:44px;}
   .loginbox button,.mactions button{min-height:46px;font-size:15px;}
 }
+/* ===== visual polish pass ===== */
+*{transition:background-color .15s ease, border-color .15s ease, color .15s ease, transform .1s ease, box-shadow .15s ease;}
+header{box-shadow:0 1px 0 rgba(0,0,0,.15);}
+header h1::before{content:"📋 ";}
+.tab{border-radius:6px;}
+.tab:hover{color:var(--text);border-color:var(--accent-dim);}
+.tab.active{box-shadow:0 1px 3px rgba(0,0,0,.25);}
+.rail{box-shadow:1px 0 0 rgba(0,0,0,.08);}
+.branchrow:hover{transform:translateX(2px);}
+.branchrow.active{box-shadow:inset 3px 0 0 0 var(--accent);}
+.branchbar{box-shadow:0 1px 3px rgba(0,0,0,.15);}
+.exportbtn,.primary-btn,.addrow button{border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.2);}
+.exportbtn:hover,.primary-btn:hover,.addrow button:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.25);}
+.exportbtn:active,.primary-btn:active,.addrow button:active{transform:translateY(0);box-shadow:0 1px 2px rgba(0,0,0,.2);}
+.ghostbtn{border-radius:6px;}
+.ghostbtn:hover{transform:translateY(-1px);}
+.logoutbtn{border-radius:6px;}
+table{border-radius:6px;overflow:hidden;}
+tbody tr{transition:background-color .12s ease;}
+tbody tr:hover{background:var(--surface-2);}
+.qtybtn{border-radius:5px;}
+.qtybtn:hover{transform:scale(1.08);}
+.del:hover{color:#ff8a7a;}
+.content h2{letter-spacing:-.2px;}
+.pill{background:rgba(212,162,76,.16);border:1px solid var(--accent-dim);}
+.pill-out{background:rgba(212,162,76,.22);color:var(--accent);border-color:var(--accent-dim);}
+.pill-stock{background:rgba(90,155,216,.2);color:#7fb4e8;border-color:#3d6f9c;}
+.pill-repair{background:rgba(224,138,60,.2);color:#f0a45c;border-color:#a5641f;}
+.pill-retired{background:rgba(139,146,156,.22);color:#aeb4bc;border-color:#5c6169;}
+.pill-lost{background:rgba(224,106,92,.2);color:var(--danger);border-color:#8c3a30;}
+.statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;}
+.statcard{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:16px 14px;text-align:center;}
+.statcard-accent{border-color:var(--accent-dim);}
+.statn{font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;color:var(--text);}
+.statcard-accent .statn{color:var(--accent);}
+.statl{font-size:11.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-top:4px;}
+@media (max-width:640px){.statgrid{gap:8px;}.statcard{padding:12px 8px;}.statn{font-size:20px;}}
+.overview-row{border-radius:5px;padding-left:8px;padding-right:8px;}
+.overview-row:hover{background:var(--surface-2);}
+.modalbox{box-shadow:0 12px 40px rgba(0,0,0,.4);animation:modalIn .16s ease;}
+@keyframes modalIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.loginbox{box-shadow:0 12px 40px rgba(0,0,0,.4);border-top:3px solid var(--accent);}
+.chip:hover{border-color:var(--accent-dim);}
+.chip.on{box-shadow:0 0 0 1px var(--accent-dim);}
+::selection{background:var(--accent);color:#14181c;}
 </style>
 </head>
 <body>
@@ -653,14 +698,14 @@ function renderBranch(){
   b.items.forEach(it=>{
     const meta = [it.serial_no && `S/N ${it.serial_no}`, it.asset_tag && `Tag ${it.asset_tag}`, it.assigned_to && `Assigned: ${it.assigned_to}`].filter(Boolean).join(' · ');
     const isAsset = !!(it.serial_no || it.asset_tag);
-    const checkedOut = isAsset && it.status === 'Checked out';
+    const checkedOut = it.status === 'Checked out';
     let coBtn = '';
     if(!ro){
       if(checkedOut) coBtn = '<button class="ghostbtn" data-a="checkin" style="margin-left:0">Check in</button>';
       else if(Number(it.qty) > 0) coBtn = '<button class="ghostbtn" data-a="checkout" style="margin-left:0">Check out</button>';
     }
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><span class="itemname">${escapeHtml(it.name)}</span>${ro?'':' <button class="editbtn" data-a="rename" title="Edit details">✎</button>'}${it.status && it.status!=='In use' ? `<span class="pill">${escapeHtml(it.status)}</span>` : ''}${meta ? `<div class="itemmeta">${escapeHtml(meta)}</div>` : ''}${coBtn ? `<div style="margin-top:6px">${coBtn}</div>` : ''}</td>
+    tr.innerHTML = `<td><span class="itemname">${escapeHtml(it.name)}</span>${ro?'':' <button class="editbtn" data-a="rename" title="Edit details">✎</button>'}${it.status && it.status!=='In use' ? `<span class="${statusPillClass(it.status)}">${escapeHtml(it.status)}</span>` : ''}${meta ? `<div class="itemmeta">${escapeHtml(meta)}</div>` : ''}${coBtn ? `<div style="margin-top:6px">${coBtn}</div>` : ''}</td>
       <td class="qty">${it.qty}</td>
       <td class="actions">${ro?'':'<button class="qtybtn" data-a="dec">−</button> <button class="qtybtn" data-a="inc">+</button>'}</td>
       <td class="actions">${ro?'':'<button class="del" data-a="del">remove</button>'}</td>`;
@@ -692,10 +737,25 @@ function renderOverview(){
   content.innerHTML = `
     <h2>All Items — Company Wide</h2>
     <div class="sub">Totals across ${active.length} active branch${active.length===1?'':'es'} (archived branches excluded)</div>
-    ${names.length===0 ? '<div class="empty">No items logged anywhere yet.</div>' :
+    <div class="statgrid">
+      <div class="statcard"><div class="statn">${active.length}</div><div class="statl">Active branches</div></div>
+      <div class="statcard"><div class="statn">${names.length}</div><div class="statl">Item types</div></div>
+      <div class="statcard statcard-accent"><div class="statn">${grand}</div><div class="statl">Total units</div></div>
+    </div>
+    ${names.length===0 ? '<div class="empty">📭 No items logged anywhere yet.</div>' :
       names.map(n=>`<div class="overview-row"><span>${escapeHtml(n)}</span><span class="n">${totals[n]}</span></div>`).join('')}
     ${names.length ? `<div class="total">Grand total units: <b>${grand}</b></div>` : ''}
   `;
+}
+
+function statusPillClass(status){
+  const s = (status||'').toLowerCase();
+  if(s==='checked out') return 'pill pill-out';
+  if(s==='in stock') return 'pill pill-stock';
+  if(s==='for repair') return 'pill pill-repair';
+  if(s==='retired') return 'pill pill-retired';
+  if(s==='lost') return 'pill pill-lost';
+  return 'pill';
 }
 
 function renderAudit(){
@@ -734,16 +794,13 @@ function itemLabel(it){ return it.name + (it.asset_tag?' — Tag '+it.asset_tag:
 
 async function submitCheckout(b, it, to, due, note, qtyRaw, err){
   if(!to){ if(err) err.textContent = 'Enter who this is being checked out to.'; return false; }
-  const isAsset = !!(it.serial_no || it.asset_tag);
-  const qty = isAsset ? 1 : Math.max(1, Number(qtyRaw)||1);
-  if(!isAsset && qty > Number(it.qty)){ if(err) err.textContent = `Only ${it.qty} on hand.`; return false; }
-  if(isAsset){
-    const { error: ue } = await sb.from('items').update({ status:'Checked out', assigned_to:to, updated_at:new Date().toISOString() }).eq('id', it.id);
-    if(ue){ if(err) err.textContent = 'Save failed: '+ue.message; return false; }
-  } else {
-    const { error: ue } = await sb.from('items').update({ qty: Number(it.qty)-qty, updated_at:new Date().toISOString() }).eq('id', it.id);
-    if(ue){ if(err) err.textContent = 'Save failed: '+ue.message; return false; }
-  }
+  const qty = Math.max(1, Number(qtyRaw)||1);
+  if(qty > Number(it.qty)){ if(err) err.textContent = `Only ${it.qty} on hand.`; return false; }
+  const newQty = Number(it.qty) - qty;
+  const patch = { qty:newQty, updated_at:new Date().toISOString() };
+  if(newQty === 0){ patch.status = 'Checked out'; patch.assigned_to = to; } // fully out: show it on the row
+  const { error: ue } = await sb.from('items').update(patch).eq('id', it.id);
+  if(ue){ if(err) err.textContent = 'Save failed: '+ue.message; return false; }
   const { error: ce } = await sb.from('checkouts').insert({ item_id:it.id, branch_id:b.id, branch_name:b.name, item_name:it.name, serial_no:it.serial_no||null, asset_tag:it.asset_tag||null, checked_out_to:to, checked_out_by:currentUser, due_date:due, note, qty });
   if(ce && err) err.textContent = 'Saved item, but the loan record failed: '+ce.message;
   closeModal();
@@ -753,9 +810,9 @@ async function submitCheckout(b, it, to, due, note, qtyRaw, err){
   return true;
 }
 
-function checkoutFormHtml(b, qtyMax, isAsset){
-  return `${isAsset ? '' : `<label>Qty to check out <span class="sub2">(of ${qtyMax} on hand)</span><input id="co_qty" type="number" min="1" max="${qtyMax}" value="1"></label>`}
-    <label style="margin-top:${isAsset?0:10}px">Checked out to<input id="co_to" placeholder="Name of person"></label>
+function checkoutFormHtml(b, qtyMax){
+  return `<label>Qty to check out <span class="sub2">(of ${qtyMax} on hand)</span><input id="co_qty" type="number" min="1" max="${qtyMax}" value="1"></label>
+    <label style="margin-top:10px">Checked out to<input id="co_to" placeholder="Name of person"></label>
     <div class="grid2" style="margin-top:10px">
       <label>Due back (optional)<input id="co_due" type="date"></label>
       <label>Branch<input value="${escapeHtml(b.name)}" disabled></label>
@@ -766,27 +823,22 @@ function checkoutFormHtml(b, qtyMax, isAsset){
 }
 
 function openCheckoutModal(b, it){
-  const isAsset = !!(it.serial_no || it.asset_tag);
   const ov = document.getElementById('modalOverlay');
-  ov.innerHTML = `<div class="modalbox"><h3>Check out<span class="sub2">${escapeHtml(itemLabel(it))}</span></h3>${checkoutFormHtml(b, it.qty, isAsset)}</div>`;
+  ov.innerHTML = `<div class="modalbox"><h3>Check out<span class="sub2">${escapeHtml(itemLabel(it))}</span></h3>${checkoutFormHtml(b, it.qty)}</div>`;
   ov.style.display = 'flex';
   ov.onclick = e=>{ if(e.target===ov) closeModal(); };
   document.getElementById('co_cancel').onclick = closeModal;
   document.getElementById('co_save').onclick = ()=>{
     const err = document.getElementById('co_err');
-    const qtyEl = document.getElementById('co_qty');
-    submitCheckout(b, it, document.getElementById('co_to').value.trim(), document.getElementById('co_due').value || null, document.getElementById('co_note').value.trim() || null, qtyEl?qtyEl.value:1, err);
+    submitCheckout(b, it, document.getElementById('co_to').value.trim(), document.getElementById('co_due').value || null, document.getElementById('co_note').value.trim() || null, document.getElementById('co_qty').value, err);
   };
 }
 
 function openCheckoutPicker(b){
-  const eligible = b.items.filter(it => (it.serial_no || it.asset_tag) ? it.status !== 'Checked out' : Number(it.qty) > 0);
+  const eligible = b.items.filter(it => Number(it.qty) > 0);
   if(!eligible.length){ alert('Nothing in this branch is currently available to check out.'); return; }
   const ov = document.getElementById('modalOverlay');
-  const optHtml = eligible.map(it=>{
-    const isAsset = !!(it.serial_no || it.asset_tag);
-    return `<option value="${it.id}" data-max="${isAsset?1:it.qty}" data-asset="${isAsset?1:0}">${escapeHtml(itemLabel(it))}${isAsset?'':' ('+it.qty+' on hand)'}</option>`;
-  }).join('');
+  const optHtml = eligible.map(it=>`<option value="${it.id}" data-max="${it.qty}">${escapeHtml(itemLabel(it))} (${it.qty} on hand)</option>`).join('');
   ov.innerHTML = `<div class="modalbox">
     <h3>Check out<span class="sub2">${escapeHtml(b.name)}</span></h3>
     <label>Which item<select id="co_item">${optHtml}</select></label>
@@ -797,12 +849,11 @@ function openCheckoutPicker(b){
   const sel = document.getElementById('co_item');
   const wire = ()=>{
     const it = eligible.find(x=>x.id===sel.value);
-    document.getElementById('co_form').innerHTML = checkoutFormHtml(b, it.qty, !!(it.serial_no||it.asset_tag));
+    document.getElementById('co_form').innerHTML = checkoutFormHtml(b, it.qty);
     document.getElementById('co_cancel').onclick = closeModal;
     document.getElementById('co_save').onclick = ()=>{
       const err = document.getElementById('co_err');
-      const qtyEl = document.getElementById('co_qty');
-      submitCheckout(b, it, document.getElementById('co_to').value.trim(), document.getElementById('co_due').value || null, document.getElementById('co_note').value.trim() || null, qtyEl?qtyEl.value:1, err);
+      submitCheckout(b, it, document.getElementById('co_to').value.trim(), document.getElementById('co_due').value || null, document.getElementById('co_note').value.trim() || null, document.getElementById('co_qty').value, err);
     };
   };
   sel.onchange = wire; wire();
@@ -816,17 +867,14 @@ async function checkInItem(b, it){
 }
 
 async function checkInRecordById(r){
-  const isAsset = !!(r.serial_no || r.asset_tag);
   const label = (r.qty>1?r.qty+' x ':'') + r.item_name;
   if(!confirm(`Check in ${label} from ${r.checked_out_to}?`)) return;
-  if(isAsset){
-    const { error: ue } = await sb.from('items').update({ status:'In use', assigned_to:null, updated_at:new Date().toISOString() }).eq('id', r.item_id);
-    if(ue){ alert('Update failed: '+ue.message); return; }
-  } else {
-    const { data: itRows } = await sb.from('items').select('id,qty').eq('id', r.item_id).limit(1);
-    if(itRows && itRows[0]){
-      await sb.from('items').update({ qty: Number(itRows[0].qty)+Number(r.qty||1), updated_at:new Date().toISOString() }).eq('id', r.item_id);
-    }
+  const { data: itRows } = await sb.from('items').select('id,qty,status').eq('id', r.item_id).limit(1);
+  if(itRows && itRows[0]){
+    const newQty = Number(itRows[0].qty) + Number(r.qty||1);
+    const patch = { qty:newQty, updated_at:new Date().toISOString() };
+    if(itRows[0].status === 'Checked out'){ patch.status = 'In use'; patch.assigned_to = null; } // was fully out, now something's back
+    await sb.from('items').update(patch).eq('id', r.item_id);
   }
   await sb.from('checkouts').update({ returned_at:new Date().toISOString(), returned_by:currentUser }).eq('id', r.id);
   await logAudit('checkin', `Checked in ${label} to ${r.branch_name} (was out to ${r.checked_out_to})`);
