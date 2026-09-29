@@ -69,7 +69,7 @@ header .stamp{
 .userbadge{
   display:flex; align-items:center; gap:10px; font-size:12.5px; color:var(--text-dim);
 }
-.userbadge b{color:var(--text); font-family:'IBM Plex Mono',monospace;}
+.userbadge b{color:var(--text); font-weight:600;}
 .logoutbtn{
   padding:5px 11px; background:var(--surface-2); border:1px solid var(--border); color:var(--text-dim);
   border-radius:4px; cursor:pointer; font-size:12px;
@@ -200,22 +200,30 @@ td.actions{width:80px; text-align:right;}
 html{-webkit-text-size-adjust:100%;}
 button,.tab,.branchrow,.chip{touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
 .hdr-actions{display:contents;}
-.railhead,.branchbar,#railBackdrop{display:none;}
+.mobilenav{display:contents;}
+.navtoggle{display:none;}
+.railhead,.branchbar,#railBackdrop,#navBackdrop{display:none;}
 @media (max-width:768px){
   body{min-height:100dvh;}
-  header{padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top,0px));gap:8px 10px;align-items:center;}
+  header{padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top,0px));gap:8px 10px;align-items:center;position:relative;}
+  .navtoggle{display:flex;order:0;align-items:center;justify-content:center;width:38px;height:38px;flex:0 0 auto;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:16px;cursor:pointer;}
   header h1{order:1;font-size:15px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   header .stamp{display:none;}
   .userbadge{order:2;font-size:12px;gap:8px;}
   .userbadge b{max-width:105px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom;}
   .hide-sm{display:none;}
-  .tabs{order:3;width:100%;margin-left:0;gap:6px;flex-wrap:wrap;}
-  .tab{flex:1 1 30%;text-align:center;padding:9px 4px;white-space:nowrap;font-size:12px;}
-  .hdr-actions{display:flex;order:4;width:100%;gap:6px;flex-wrap:wrap;padding-bottom:2px;}
-  .hdr-actions>*{flex:0 0 auto;}
-  .exportbtn,.logoutbtn{min-height:38px;padding:8px 10px;font-size:12.5px;}
-  .hdr-actions .exportbtn,.hdr-actions .logoutbtn{padding:8px;min-width:38px;justify-content:center;}
-  .hdr-actions i{font-size:14px;}
+  /* tabs + actions collapse into a dropdown menu opened by the hamburger */
+  .mobilenav{display:none;position:absolute;left:0;right:0;top:100%;background:var(--surface);border-bottom:1px solid var(--border);box-shadow:0 10px 24px rgba(0,0,0,.3);z-index:75;flex-direction:column;padding:10px 12px calc(12px + env(safe-area-inset-bottom,0px));max-height:calc(100dvh - 56px);overflow-y:auto;gap:10px;}
+  .mobilenav.open{display:flex;}
+  #navBackdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:70;opacity:0;pointer-events:none;transition:opacity .2s;}
+  #navBackdrop.open{opacity:1;pointer-events:auto;}
+  .tabs{width:100%;margin-left:0;gap:6px;flex-wrap:wrap;}
+  .tab{flex:1 1 30%;text-align:center;padding:11px 4px;white-space:nowrap;font-size:13px;}
+  .hdr-actions{display:flex;width:100%;gap:6px;flex-wrap:wrap;}
+  .hdr-actions>*{flex:1 1 auto;}
+  .hdr-actions .hide-sm{display:inline;}
+  .exportbtn,.logoutbtn{min-height:42px;padding:8px 10px;font-size:13px;}
+  .hdr-actions .exportbtn,.hdr-actions .logoutbtn{display:flex;align-items:center;justify-content:center;gap:6px;}
   .branchbar{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--surface-2);border-bottom:1px solid var(--border);font-size:14.5px;cursor:pointer;}
   .branchbar .chg{color:var(--accent);font-size:13px;font-weight:600;}
   .branchbar.off{display:none;}
@@ -365,22 +373,26 @@ header h1 i{color:var(--accent);margin-right:2px;}
 <div id="modalOverlay" class="modal"></div>
 
 <div id="railBackdrop"></div>
+<div id="navBackdrop"></div>
 <header>
+  <button class="navtoggle" id="navToggle" aria-label="Menu"><i class="fa-solid fa-bars"></i></button>
   <h1><i class="fa-solid fa-boxes-stacked"></i> ICT Inventory Ledger</h1>
   <span class="stamp mono" id="branchCountBadge">— BRANCHES</span>
-  <div class="tabs">
-    <div class="tab active" id="tabBranch">By Branch</div>
-    <div class="tab" id="tabAll">All Items</div>
-    <div class="tab" id="tabAudit">Audit Log</div>
-    <div class="tab" id="tabBackups">Backups</div>
-    <div class="tab" id="tabOnLoan">On Loan</div>
-  </div>
-  <div class="hdr-actions">
-  <button class="exportbtn" id="exportBtn" title="Download a full Excel backup"><i class="fa-solid fa-file-arrow-down"></i><span class="hide-sm"> Export Excel</span></button>
-  <button class="exportbtn" id="importBtn" title="Import items from Excel (admin)"><i class="fa-solid fa-file-arrow-up"></i><span class="hide-sm"> Import Excel</span></button>
-  <button class="logoutbtn" id="templateBtn" title="Download a blank import template"><i class="fa-solid fa-file-lines"></i><span class="hide-sm"> Template</span></button>
-  <input type="file" id="importFile" accept=".xlsx,.xls,.csv" hidden>
-  <button class="exportbtn" id="installBtn" style="display:none" title="Install app"><i class="fa-solid fa-mobile-screen-button"></i><span class="hide-sm"> Install app</span></button>
+  <div class="mobilenav" id="mobileNav">
+    <div class="tabs">
+      <div class="tab active" id="tabBranch">By Branch</div>
+      <div class="tab" id="tabAll">All Items</div>
+      <div class="tab" id="tabAudit">Audit Log</div>
+      <div class="tab" id="tabBackups">Backups</div>
+      <div class="tab" id="tabOnLoan">On Loan</div>
+    </div>
+    <div class="hdr-actions">
+    <button class="exportbtn" id="exportBtn" title="Download a full Excel backup"><i class="fa-solid fa-file-arrow-down"></i><span class="hide-sm"> Export Excel</span></button>
+    <button class="exportbtn" id="importBtn" title="Import items from Excel (admin)"><i class="fa-solid fa-file-arrow-up"></i><span class="hide-sm"> Import Excel</span></button>
+    <button class="logoutbtn" id="templateBtn" title="Download a blank import template"><i class="fa-solid fa-file-lines"></i><span class="hide-sm"> Template</span></button>
+    <input type="file" id="importFile" accept=".xlsx,.xls,.csv" hidden>
+    <button class="exportbtn" id="installBtn" style="display:none" title="Install app"><i class="fa-solid fa-mobile-screen-button"></i><span class="hide-sm"> Install app</span></button>
+    </div>
   </div>
   <div class="userbadge">
     <span><span class="hide-sm">Signed in as </span><b id="userLabel">—</b></span>
@@ -1248,6 +1260,16 @@ function closeRail(){ document.querySelector('.rail').classList.remove('open'); 
 document.getElementById('branchBar').onclick = openRail;
 document.getElementById('railBackdrop').onclick = closeRail;
 document.getElementById('railClose').onclick = closeRail;
+
+/* mobile hamburger nav (tabs + export/import/etc) */
+function openNav(){ document.getElementById('mobileNav').classList.add('open'); document.getElementById('navBackdrop').classList.add('open'); }
+function closeNav(){ document.getElementById('mobileNav').classList.remove('open'); document.getElementById('navBackdrop').classList.remove('open'); }
+document.getElementById('navToggle').onclick = ()=>{
+  const open = document.getElementById('mobileNav').classList.contains('open');
+  open ? closeNav() : openNav();
+};
+document.getElementById('navBackdrop').onclick = closeNav;
+document.getElementById('mobileNav').querySelectorAll('.tab').forEach(t=>t.addEventListener('click', closeNav));
 
 let deferredInstall = null;
 const installBtn = document.getElementById('installBtn');
