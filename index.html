@@ -15,21 +15,28 @@
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
 :root{
-  --bg:#14181c; --surface:#1c2229; --surface-2:#2a313b; --border:#3c4552;
-  --text:#f4f2ec; --text-dim:#aab1bb; --accent:#e3b25c; --accent-dim:#a17f3c;
-  --danger:#e06a5c; --ok:#8fc189;
+  --bg:#f2eefc; --surface:#ffffff; --surface-2:#f1ecfb; --border:#e1d7f7;
+  --text:#241b3d; --text-dim:#7a6fa0; --accent:#7c3aed; --accent-dim:#a78bfa;
+  --danger:#e0605a; --ok:#3fae6c;
+  --page-grad:linear-gradient(160deg,#c9b8f5 0%,#efe8fc 55%,#f7f4fd 100%);
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
 }
-@media (prefers-color-scheme:light){
-  :root:not([data-theme="dark"]){
-    --bg:#f3f1ea; --surface:#fffefb; --surface-2:#eae5d6; --border:#c9c1ac;
-    --text:#181c21; --text-dim:#52585f; --accent:#8f6222; --accent-dim:#c99a4d;
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#1c1730; --surface:#251f3d; --surface-2:#2f2750; --border:#453a6e;
+    --text:#f0ecfb; --text-dim:#b3a6d9; --accent:#a78bfa; --accent-dim:#7c3aed;
+    --page-grad:linear-gradient(160deg,#2a2150 0%,#1c1730 60%,#1c1730 100%);
   }
 }
-:root[data-theme="dark"]{ }
+:root[data-theme="dark"]{
+  --bg:#1c1730; --surface:#251f3d; --surface-2:#2f2750; --border:#453a6e;
+  --text:#f0ecfb; --text-dim:#b3a6d9; --accent:#a78bfa; --accent-dim:#7c3aed;
+  --page-grad:linear-gradient(160deg,#2a2150 0%,#1c1730 60%,#1c1730 100%);
+}
 *{box-sizing:border-box;}
 html{scroll-padding-top:env(safe-area-inset-top,0px);}
 html,body{height:100%;margin:0;}
@@ -253,7 +260,6 @@ button,.tab,.branchrow,.chip{touch-action:manipulation;-webkit-tap-highlight-col
 /* ===== visual polish pass ===== */
 *{transition:background-color .15s ease, border-color .15s ease, color .15s ease, transform .1s ease, box-shadow .15s ease;}
 header{box-shadow:0 1px 0 rgba(0,0,0,.15);}
-header h1::before{content:"📋 ";}
 .tab{border-radius:6px;}
 .tab:hover{color:var(--text);border-color:var(--accent-dim);}
 .tab.active{box-shadow:0 1px 3px rgba(0,0,0,.25);}
@@ -295,6 +301,24 @@ tbody tr:hover{background:var(--surface-2);}
 .chip:hover{border-color:var(--accent-dim);}
 .chip.on{box-shadow:0 0 0 1px var(--accent-dim);}
 ::selection{background:var(--accent);color:#14181c;}
+/* ===== violet theme polish ===== */
+.searchwrap{position:relative;margin:10px;}
+.searchwrap i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-dim);font-size:12px;}
+.searchwrap input{width:100%;margin:0;padding-left:30px;}
+.addbranch i,.exportbtn i,.logoutbtn i,.ghostbtn i,.editbtn i,.delbtn i,.qtybtn i,.del i,#addItemBtn i,.primary-btn i,#tabBranch i{margin-right:5px;}
+.qtybtn i{margin-right:0;}
+.editbtn i,.delbtn i{margin-right:0;}
+header h1 i{color:var(--accent);margin-right:2px;}
+.rail,.content,table,.modalbox,.loginbox,.statcard{border-radius:10px;}
+.rail{border-radius:0;}
+.branchrow.active{background:linear-gradient(90deg, rgba(124,58,237,.10), transparent);}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.exportbtn,.primary-btn{background:var(--accent);color:#fff;}
+.exportbtn:hover,.primary-btn:hover{background:var(--accent-dim);}
+.addbranch{color:var(--accent);font-weight:600;}
+.total b,.overview-row .n{color:var(--accent);}
+.loginbox button{background:var(--accent);}
+::selection{background:var(--accent);color:#fff;}
 </style>
 </head>
 <body>
@@ -316,7 +340,7 @@ tbody tr:hover{background:var(--surface-2);}
 
 <div id="railBackdrop"></div>
 <header>
-  <h1>ICT Inventory Ledger</h1>
+  <h1><i class="fa-solid fa-boxes-stacked"></i> ICT Inventory Ledger</h1>
   <span class="stamp mono" id="branchCountBadge">— BRANCHES</span>
   <div class="tabs">
     <div class="tab active" id="tabBranch">By Branch</div>
@@ -326,24 +350,24 @@ tbody tr:hover{background:var(--surface-2);}
     <div class="tab" id="tabOnLoan">On Loan</div>
   </div>
   <div class="hdr-actions">
-  <button class="exportbtn" id="exportBtn" title="Download a full Excel backup">⬇ Export Excel</button>
-  <button class="exportbtn" id="importBtn" title="Import items from Excel (admin)">⬆ Import Excel</button>
-  <button class="logoutbtn" id="templateBtn" title="Download a blank import template">Template</button>
+  <button class="exportbtn" id="exportBtn" title="Download a full Excel backup"><i class="fa-solid fa-file-arrow-down"></i> Export Excel</button>
+  <button class="exportbtn" id="importBtn" title="Import items from Excel (admin)"><i class="fa-solid fa-file-arrow-up"></i> Import Excel</button>
+  <button class="logoutbtn" id="templateBtn" title="Download a blank import template"><i class="fa-solid fa-file-lines"></i> Template</button>
   <input type="file" id="importFile" accept=".xlsx,.xls,.csv" hidden>
-  <button class="exportbtn" id="installBtn" style="display:none">📲 Install app</button>
+  <button class="exportbtn" id="installBtn" style="display:none"><i class="fa-solid fa-mobile-screen-button"></i> Install app</button>
   </div>
   <div class="userbadge">
     <span><span class="hide-sm">Signed in as </span><b id="userLabel">—</b></span>
-    <button class="logoutbtn" id="logoutBtn">Log out</button>
+    <button class="logoutbtn" id="logoutBtn"><i class="fa-solid fa-right-from-bracket"></i> Log out</button>
   </div>
 </header>
-<div class="branchbar" id="branchBar"><span>📍 <b id="branchBarName">Select branch</b></span><span class="chg">Change ▾</span></div>
+<div class="branchbar" id="branchBar"><span><i class="fa-solid fa-location-dot"></i> <b id="branchBarName">Select branch</b></span><span class="chg">Change <i class="fa-solid fa-chevron-down"></i></span></div>
 <main>
   <div class="rail">
     <div class="railhead"><span>Branches</span><button id="railClose" aria-label="Close">✕</button></div>
-    <input id="branchSearch" placeholder="Search branch…">
+    <div class="searchwrap"><i class="fa-solid fa-magnifying-glass"></i><input id="branchSearch" placeholder="Search branch…"></div>
     <div class="branchlist" id="branchList"></div>
-    <div class="addbranch" id="addBranch">+ Add branch</div>
+    <div class="addbranch" id="addBranch"><i class="fa-solid fa-plus"></i> Add branch</div>
     <div class="addbranch" id="toggleArchived" style="color:var(--text-dim)">Show archived</div>
   </div>
   <div class="content" id="content"></div>
@@ -573,7 +597,7 @@ function openItemModal(b, it){
     </div>
     <label>Notes<textarea id="m_notes" rows="2">${escapeHtml(v.notes)}</textarea></label>
     <div class="loginerr" id="m_err"></div>
-    <div class="mactions"><button class="ghostbtn" id="m_cancel">Cancel</button><button class="primary-btn" id="m_save">Save</button></div>
+    <div class="mactions"><button class="ghostbtn" id="m_cancel">Cancel</button><button class="primary-btn" id="m_save"><i class="fa-solid fa-check"></i> Save</button></div>
   </div>`;
   ov.style.display = 'flex';
   ov.onclick = e=>{ if(e.target===ov) closeModal(); };
@@ -637,9 +661,9 @@ function renderBranchList(){
     const row = document.createElement('div');
     row.className = 'branchrow' + (b.id===selected?' active':'');
     const adminBtn = !isAdmin() ? '' : (b.archived
-      ? '<button class="editbtn" data-a="restore" title="Restore branch">↩</button>'
-      : '<button class="editbtn" data-a="archive" title="Archive branch">📦</button>');
-    row.innerHTML = `<span class="bname">${escapeHtml(b.name)}</span><span class="rowbtns"><button class="editbtn" data-a="edit" title="Rename">✎</button>${adminBtn}<span class="cnt">${total}</span></span>`;
+      ? '<button class="editbtn" data-a="restore" title="Restore branch"><i class="fa-solid fa-rotate-left"></i></button>'
+      : '<button class="editbtn" data-a="archive" title="Archive branch"><i class="fa-solid fa-box-archive"></i></button>');
+    row.innerHTML = `<span class="bname">${escapeHtml(b.name)}</span><span class="rowbtns"><button class="editbtn" data-a="edit" title="Rename"><i class="fa-solid fa-pen"></i></button>${adminBtn}<span class="cnt">${total}</span></span>`;
     row.onclick = ()=>{ selected=b.id; view='branch'; setTabs(); closeRail(); render(); };
     row.querySelector('[data-a=edit]').onclick = (e)=>{ e.stopPropagation(); renameBranch(b); };
     const ab = row.querySelector('[data-a=archive]'); if(ab) ab.onclick = (e)=>{ e.stopPropagation(); archiveBranch(b); };
@@ -647,7 +671,7 @@ function renderBranchList(){
     list.appendChild(row);
   });
   const arch = state.branches.filter(b=>b.archived).length;
-  document.getElementById('toggleArchived').textContent = showArchived ? '← Back to active branches' : (arch ? `Show archived (${arch})` : 'No archived branches');
+  document.getElementById('toggleArchived').innerHTML = showArchived ? '<i class="fa-solid fa-arrow-left"></i> Back to active branches' : (arch ? `<i class="fa-solid fa-box-archive"></i> Show archived (${arch})` : 'No archived branches');
   const cur = state.branches.find(x=>x.id===selected), bn = document.getElementById('branchBarName');
   if(bn) bn.textContent = cur ? cur.name + (cur.archived ? ' (archived)' : '') : 'Select branch';
 }
@@ -670,18 +694,18 @@ function renderBranch(){
   const ro = !!b.archived;
   const total = b.items.reduce((s,it)=>s+Number(it.qty||0),0);
   const adminBtns = !isAdmin() ? '' : (ro
-    ? '<button class="ghostbtn" id="restoreBtn">↩ Restore</button><button class="ghostbtn dangerbtn" id="purgeBtn">Delete permanently</button>'
-    : '<button class="ghostbtn" id="archiveBtn">📦 Archive</button>');
+    ? '<button class="ghostbtn" id="restoreBtn"><i class="fa-solid fa-rotate-left"></i> Restore</button><button class="ghostbtn dangerbtn" id="purgeBtn"><i class="fa-solid fa-trash"></i> Delete permanently</button>'
+    : '<button class="ghostbtn" id="archiveBtn"><i class="fa-solid fa-box-archive"></i> Archive</button>');
   content.innerHTML = `
-    <h2>${escapeHtml(b.name)} <button class="editbtn" id="editBranchName" title="Rename branch">✎</button>${adminBtns}</h2>
+    <h2>${escapeHtml(b.name)} <button class="editbtn" id="editBranchName" title="Rename branch"><i class="fa-solid fa-pen"></i></button>${adminBtns}</h2>
     <div class="sub">ICT inventory for this branch</div>
     ${ro ? '<div class="archivedbanner">This branch is archived (read-only). Restore it to make changes.</div>' : `
     <div class="addrow">
       <input name="iname" placeholder="Item name (e.g. Laptop)">
       <input name="iqty" type="number" min="1" value="1" placeholder="Qty">
-      <button id="addItemBtn">Add item</button>
+      <button id="addItemBtn"><i class="fa-solid fa-plus"></i> Add item</button>
     </div>
-    <div style="margin:-8px 0 16px"><button class="ghostbtn" id="addDetailBtn" style="margin-left:0">+ Add asset with details (serial, tag, status…)</button><button class="ghostbtn" id="checkoutPickBtn">↗ Check out an asset</button></div>`}
+    <div style="margin:-8px 0 16px"><button class="ghostbtn" id="addDetailBtn" style="margin-left:0"><i class="fa-solid fa-plus"></i> Add asset with details (serial, tag, status…)</button><button class="ghostbtn" id="checkoutPickBtn"><i class="fa-solid fa-right-from-bracket"></i> Check out an asset</button></div>`}
     <table class="itemtable">
       <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th></th><th></th></tr></thead>
       <tbody id="itemsBody"></tbody>
@@ -701,14 +725,14 @@ function renderBranch(){
     const checkedOut = it.status === 'Checked out';
     let coBtn = '';
     if(!ro){
-      if(checkedOut) coBtn = '<button class="ghostbtn" data-a="checkin" style="margin-left:0">Check in</button>';
-      else if(Number(it.qty) > 0) coBtn = '<button class="ghostbtn" data-a="checkout" style="margin-left:0">Check out</button>';
+      if(checkedOut) coBtn = '<button class="ghostbtn" data-a="checkin" style="margin-left:0"><i class="fa-solid fa-arrow-right-to-bracket"></i> Check in</button>';
+      else if(Number(it.qty) > 0) coBtn = '<button class="ghostbtn" data-a="checkout" style="margin-left:0"><i class="fa-solid fa-right-from-bracket"></i> Check out</button>';
     }
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><span class="itemname">${escapeHtml(it.name)}</span>${ro?'':' <button class="editbtn" data-a="rename" title="Edit details">✎</button>'}${it.status && it.status!=='In use' ? `<span class="${statusPillClass(it.status)}">${escapeHtml(it.status)}</span>` : ''}${meta ? `<div class="itemmeta">${escapeHtml(meta)}</div>` : ''}${coBtn ? `<div style="margin-top:6px">${coBtn}</div>` : ''}</td>
+    tr.innerHTML = `<td><span class="itemname">${escapeHtml(it.name)}</span>${ro?'':' <button class="editbtn" data-a="rename" title="Edit details"><i class="fa-solid fa-pen"></i></button>'}${it.status && it.status!=='In use' ? `<span class="${statusPillClass(it.status)}">${escapeHtml(it.status)}</span>` : ''}${meta ? `<div class="itemmeta">${escapeHtml(meta)}</div>` : ''}${coBtn ? `<div style="margin-top:6px">${coBtn}</div>` : ''}</td>
       <td class="qty">${it.qty}</td>
-      <td class="actions">${ro?'':'<button class="qtybtn" data-a="dec">−</button> <button class="qtybtn" data-a="inc">+</button>'}</td>
-      <td class="actions">${ro?'':'<button class="del" data-a="del">remove</button>'}</td>`;
+      <td class="actions">${ro?'':'<button class="qtybtn" data-a="dec"><i class="fa-solid fa-minus"></i></button> <button class="qtybtn" data-a="inc"><i class="fa-solid fa-plus"></i></button>'}</td>
+      <td class="actions">${ro?'':'<button class="del" data-a="del"><i class="fa-solid fa-trash"></i> remove</button>'}</td>`;
     const h = (a, fn)=>{ const el = tr.querySelector(`[data-a=${a}]`); if(el) el.onclick = fn; };
     h('rename', ()=>openItemModal(b, it)); h('inc', ()=>bumpItem(b, it, 1)); h('dec', ()=>bumpItem(b, it, -1)); h('del', ()=>deleteItem(b, it));
     h('checkout', ()=>openCheckoutModal(b, it)); h('checkin', ()=>checkInItem(b, it));
@@ -742,7 +766,7 @@ function renderOverview(){
       <div class="statcard"><div class="statn">${names.length}</div><div class="statl">Item types</div></div>
       <div class="statcard statcard-accent"><div class="statn">${grand}</div><div class="statl">Total units</div></div>
     </div>
-    ${names.length===0 ? '<div class="empty">📭 No items logged anywhere yet.</div>' :
+    ${names.length===0 ? '<div class="empty"><i class="fa-solid fa-inbox"></i> No items logged anywhere yet.</div>' :
       names.map(n=>`<div class="overview-row"><span>${escapeHtml(n)}</span><span class="n">${totals[n]}</span></div>`).join('')}
     ${names.length ? `<div class="total">Grand total units: <b>${grand}</b></div>` : ''}
   `;
@@ -819,7 +843,7 @@ function checkoutFormHtml(b, qtyMax){
     </div>
     <label>Note (optional)<textarea id="co_note" rows="2" placeholder="Purpose, condition, etc."></textarea></label>
     <div class="loginerr" id="co_err"></div>
-    <div class="mactions"><button class="ghostbtn" id="co_cancel">Cancel</button><button class="primary-btn" id="co_save">Check out</button></div>`;
+    <div class="mactions"><button class="ghostbtn" id="co_cancel">Cancel</button><button class="primary-btn" id="co_save"><i class="fa-solid fa-right-from-bracket"></i> Check out</button></div>`;
 }
 
 function openCheckoutModal(b, it){
@@ -977,7 +1001,7 @@ async function exportExcel(){
   }catch(e){
     console.error(e); alert('Export failed: ' + (e.message || e));
   }finally{
-    btn.disabled = false; btn.textContent = '⬇ Export Excel';
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-arrow-down"></i> Export Excel';
   }
 }
 
@@ -1065,7 +1089,7 @@ async function importExcel(file){
     console.error(e); alert('Import failed (some rows may have been applied): ' + (e.message || JSON.stringify(e)));
     loadAllData();
   }finally{
-    btn.disabled = false; btn.textContent = '⬆ Import Excel';
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-arrow-up"></i> Import Excel';
   }
 }
 
@@ -1115,7 +1139,7 @@ function renderBackups(){
   content.innerHTML = `
     <h2>Backups</h2>
     <div class="sub">A snapshot is saved automatically the first time an admin opens the app each day, and before every import, permanent delete and restore. The last 30 days are kept.</div>
-    <div style="margin-bottom:16px"><button class="primary-btn" id="snapNowBtn">Save snapshot now</button></div>
+    <div style="margin-bottom:16px"><button class="primary-btn" id="snapNowBtn"><i class="fa-solid fa-camera"></i> Save snapshot now</button></div>
     ${backupList.length===0 ? '<div class="empty">No snapshots yet.</div>' : `
     <table class="audittable">
       <thead><tr><th>Saved</th><th>Type</th><th>By</th><th style="text-align:right">Branches</th><th style="text-align:right">Items</th><th></th></tr></thead>
@@ -1124,7 +1148,7 @@ function renderBackups(){
         <td>${escapeHtml(KIND_LABEL[r.kind]||r.kind)}</td>
         <td class="user">${escapeHtml(r.created_by||'')}</td>
         <td class="qty">${r.branch_count}</td><td class="qty">${r.item_count}</td>
-        <td style="text-align:right;white-space:nowrap"><button class="ghostbtn" data-a="dl" data-id="${r.id}">⬇ Excel</button><button class="ghostbtn" data-a="restore" data-id="${r.id}">Restore</button><button class="del" data-a="rm" data-id="${r.id}">delete</button></td>
+        <td style="text-align:right;white-space:nowrap"><button class="ghostbtn" data-a="dl" data-id="${r.id}"><i class="fa-solid fa-file-arrow-down"></i> Excel</button><button class="ghostbtn" data-a="restore" data-id="${r.id}"><i class="fa-solid fa-rotate-left"></i> Restore</button><button class="del" data-a="rm" data-id="${r.id}"><i class="fa-solid fa-trash"></i> delete</button></td>
       </tr>`).join('')}</tbody>
     </table>`}
   `;
