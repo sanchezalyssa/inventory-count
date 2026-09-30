@@ -753,11 +753,9 @@ async function lookupScannedCode(raw){
     const { data } = await sb.from('items').select('*').eq('id', Number(m[1])).maybeSingle();
     return data || null;
   }
-  const { data: byTag } = await sb.from('items').select('*').ilike('asset_tag', raw).limit(1);
-  if(byTag && byTag.length) return byTag[0];
-  const { data: bySerial } = await sb.from('items').select('*').ilike('serial_no', raw).limit(1);
-  if(bySerial && bySerial.length) return bySerial[0];
-  return null;
+  const esc = raw.replace(/"/g, '\\"'); // one round trip: check both fields at once
+  const { data } = await sb.from('items').select('*').or(`asset_tag.ilike."${esc}",serial_no.ilike."${esc}"`).limit(1);
+  return (data && data[0]) || null;
 }
 async function onScanSuccess(text){
   if(scanLocked) return; // camera can fire the callback more than once for the same frame while it's stopping
@@ -769,8 +767,9 @@ async function onScanSuccess(text){
   try{ found = await lookupScannedCode(raw); }
   catch(e){ alert('Could not check that code against the database: '+(e.message||e)); return; }
   if(found){
-    await loadAllData(); // make sure the branch/item lists reflect the DB state before we navigate to it
-    const b = state.branches.find(x=>x.id===found.branch_id);
+    let b = state.branches.find(x=>x.id===found.branch_id);
+    // only pay for a full reload if the local list is actually missing this item
+    if(!b || !b.items.some(x=>x.id===found.id)){ await loadAllData(); b = state.branches.find(x=>x.id===found.branch_id); }
     if(!b){ alert('Found a match, but could not locate its branch — try refreshing.'); return; }
     selected=b.id; showArchived=!!b.archived; view='branch'; setTabs(); render();
     if(b.archived) alert(`Found "${found.name}" in ${b.name} — this branch is archived (read-only).`);
