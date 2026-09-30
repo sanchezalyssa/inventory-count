@@ -365,7 +365,8 @@ header h1 i{color:var(--accent);margin-right:2px;}
     position:absolute; top:0; left:0; width:100%; padding:8mm; background:#fff;
   }
   .label{border:1px dashed #999; border-radius:2mm; padding:4mm; text-align:center; break-inside:avoid; color:#000;}
-  .label img{width:26mm; height:26mm;}
+  .label .qrbox{display:flex; justify-content:center;}
+  .label .qrbox img, .label .qrbox canvas{width:26mm !important; height:26mm !important;}
   .label .lname{font-size:10pt; font-weight:600; margin-top:2mm; color:#000;}
   .label .lbranch{font-size:7.5pt; color:#555;}
   .label .ltag{font-size:7.5pt; color:#555; margin-top:1mm;}
@@ -432,7 +433,7 @@ header h1 i{color:var(--accent);margin-right:2px;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 const SUPABASE_URL = 'https://maflvhksxdcbgqmogfee.supabase.co';
@@ -680,9 +681,9 @@ function openItemModal(b, it){
       msg = `Edited "${it.name}" in ${b.name} — ${diffs.join('; ')}`;
     }
     if(res.error){ err.textContent = 'Save failed: '+res.error.message; return; }
-    closeModal();
     await logAudit(isNew?'add_item':'edit_item', msg);
-    refreshAudit(); loadAllData();
+    await Promise.all([refreshAudit(), loadAllData()]);
+    closeModal();
   };
 }
 
@@ -704,21 +705,27 @@ async function deleteItem(b, it){
 /* ---------- QR labels: print + scan ---------- */
 const qrCode = it => `ICTITEM:${it.id}`;
 
-async function printLabels(b){
+function printLabels(b){
   if(typeof QRCode === 'undefined'){ alert('QR code library did not load — check your connection and try again.'); return; }
   const box = document.getElementById('printLabels');
-  box.innerHTML = '<div class="label" style="border:none">Generating…</div>';
-  const cells = await Promise.all(b.items.map(async it=>{
-    const dataUrl = await QRCode.toDataURL(qrCode(it), { width:220, margin:1 });
+  box.innerHTML = '';
+  b.items.forEach(it=>{
     const sub = [it.asset_tag && `Tag ${it.asset_tag}`, it.serial_no && `S/N ${it.serial_no}`].filter(Boolean).join(' · ');
-    return `<div class="label"><img src="${dataUrl}" alt=""><div class="lname">${escapeHtml(it.name)}</div><div class="lbranch">${escapeHtml(b.name)}</div>${sub?`<div class="ltag">${escapeHtml(sub)}</div>`:''}</div>`;
-  }));
-  box.innerHTML = cells.join('');
+    const label = document.createElement('div'); label.className = 'label';
+    const qrbox = document.createElement('div'); qrbox.className = 'qrbox';
+    const nameDiv = document.createElement('div'); nameDiv.className = 'lname'; nameDiv.textContent = it.name;
+    const branchDiv = document.createElement('div'); branchDiv.className = 'lbranch'; branchDiv.textContent = b.name;
+    label.append(qrbox, nameDiv, branchDiv);
+    if(sub){ const tagDiv = document.createElement('div'); tagDiv.className = 'ltag'; tagDiv.textContent = sub; label.appendChild(tagDiv); }
+    box.appendChild(label);
+    new QRCode(qrbox, { text: qrCode(it), width:150, height:150, correctLevel: QRCode.CorrectLevel.M });
+  });
   requestAnimationFrame(()=>window.print());
 }
 
-let scanner = null;
+let scanner = null, scanLocked = false;
 function openScanModal(){
+  scanLocked = false;
   const ov = document.getElementById('modalOverlay');
   ov.innerHTML = `<div class="modalbox">
     <h3>Scan an item's label</h3>
@@ -735,32 +742,48 @@ function openScanModal(){
     .catch(err=>{ document.getElementById('scan_err').textContent = 'Could not open the camera: '+(err.message||err); });
 }
 function closeScanModal(){
-  if(scanner){ scanner.stop().then(()=>scanner.clear()).catch(()=>{}); scanner = null; }
+  if(scanner){ const s = scanner; scanner = null; s.stop().then(()=>s.clear()).catch(()=>{}); }
   closeModal();
 }
-function onScanSuccess(text){
-  closeScanModal();
-  const m = /^ICTITEM:(\d+)$/.exec(text.trim());
+// looks up matches straight from the database, never the local cache — avoids
+// missing an item that was just added a moment ago and hasn't synced down yet
+async function lookupScannedCode(raw){
+  const m = /^ICTITEM:(\d+)$/.exec(raw);
   if(m){
-    const id = Number(m[1]);
-    for(const b of state.branches){
-      const it = b.items.find(x=>x.id===id);
-      if(it){
-        selected=b.id; showArchived=!!b.archived; view='branch'; setTabs(); render();
-        if(b.archived) alert(`Found "${it.name}" in ${b.name} — this branch is archived (read-only).`);
-        else openItemModal(b, it);
-        return;
-      }
-    }
-    alert("That label's item wasn't found — it may have been deleted.");
+    const { data } = await sb.from('items').select('*').eq('id', Number(m[1])).maybeSingle();
+    return data || null;
+  }
+  const { data: byTag } = await sb.from('items').select('*').ilike('asset_tag', raw).limit(1);
+  if(byTag && byTag.length) return byTag[0];
+  const { data: bySerial } = await sb.from('items').select('*').ilike('serial_no', raw).limit(1);
+  if(bySerial && bySerial.length) return bySerial[0];
+  return null;
+}
+async function onScanSuccess(text){
+  if(scanLocked) return; // camera can fire the callback more than once for the same frame while it's stopping
+  scanLocked = true;
+  closeScanModal();
+  const raw = text.trim();
+  const isOwnLabel = /^ICTITEM:\d+$/.test(raw);
+  let found;
+  try{ found = await lookupScannedCode(raw); }
+  catch(e){ alert('Could not check that code against the database: '+(e.message||e)); return; }
+  if(found){
+    await loadAllData(); // make sure the branch/item lists reflect the DB state before we navigate to it
+    const b = state.branches.find(x=>x.id===found.branch_id);
+    if(!b){ alert('Found a match, but could not locate its branch — try refreshing.'); return; }
+    selected=b.id; showArchived=!!b.archived; view='branch'; setTabs(); render();
+    if(b.archived) alert(`Found "${found.name}" in ${b.name} — this branch is archived (read-only).`);
+    else openItemModal(b, found);
     return;
   }
-  // unrecognized code: treat as a new asset in the current branch, prefill serial
+  if(isOwnLabel){ alert("That label's item wasn't found — it may have been deleted."); return; }
+  // no existing item matches this code: treat as a new asset in the current branch, prefill serial
   const b = state.branches.find(x=>x.id===selected) || state.branches.find(x=>!x.archived);
   if(!b){ alert('Add a branch first.'); return; }
   selected = b.id; view='branch'; setTabs(); render();
   openItemModal(b, null);
-  const s = document.getElementById('m_serial'); if(s) s.value = text.trim();
+  const s = document.getElementById('m_serial'); if(s) s.value = raw;
 }
 
 /* ---------- render ---------- */
