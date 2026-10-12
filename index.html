@@ -496,7 +496,7 @@ function applySession(user){
   currentUser = user.email;
   currentRole = (user.app_metadata && user.app_metadata.role) || 'staff';
   const rawBranch = user.app_metadata && user.app_metadata.branch_id;
-  myBranchId = (rawBranch===undefined || rawBranch===null || rawBranch==='') ? null : Number(rawBranch);
+  myBranchId = (rawBranch===undefined || rawBranch===null || rawBranch==='') ? null : String(rawBranch);
   document.getElementById('userLabel').textContent = currentUser + (isAdmin() ? ' (admin)' : '');
   ['importBtn','templateBtn','toggleArchived','tabBackups'].forEach(id=>{ document.getElementById(id).style.display = isAdmin() ? '' : 'none'; });
   // branch-tied accounts: hide everything that spans multiple branches, lock to their one branch
@@ -612,7 +612,12 @@ async function loadAllData(){
     return;
   }
   showBanner(null);
-  state.branches = nestData(branches, items);
+  // Branch IDs are UUIDs. Keep branch-tied accounts scoped to their assigned branch.
+  // Database RLS must also enforce this; this client-side filter is only the UI layer.
+  const scopedBranches = isBranchLocked() ? (branches||[]).filter(b=>String(b.id)===String(myBranchId)) : (branches||[]);
+  const allowedBranchIds = new Set(scopedBranches.map(b=>String(b.id)));
+  const scopedItems = isBranchLocked() ? (items||[]).filter(it=>allowedBranchIds.has(String(it.branch_id))) : (items||[]);
+  state.branches = nestData(scopedBranches, scopedItems);
   const visible = state.branches.filter(b=>!!b.archived===showArchived);
   if(!selected || !visible.find(b=>b.id===selected)) selected = (visible[0] && visible[0].id) || null;
   if(isBranchLocked()) selected = myBranchId; // re-assert even if the fetch somehow returned other branches
