@@ -373,6 +373,16 @@ header h1 i{color:var(--accent);margin-right:2px;}
 }
 
 /* ===== reports ===== */
+/* inventory search */
+.item-search-wrap{margin:14px 0 12px;max-width:620px;}
+.item-search{display:block;width:100%;padding:11px 13px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font:inherit;outline:none;}
+.item-search:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent);}
+.search-hint{font-size:11.5px;color:var(--text-dim);margin-top:5px;}
+.search-results{margin:8px 0 18px;overflow-x:auto;}
+.search-results table{width:100%;border-collapse:collapse;}
+.search-results tbody tr{cursor:pointer;}
+.search-results tbody tr:hover{background:var(--surface-2);}
+.search-count{font-size:12px;color:var(--text-dim);margin:8px 0;}
 .rp-filters{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;margin:4px 0 12px;}
 .rp-filters label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--text-dim);}
 .rp-filters select,.rp-filters input[type=date]{padding:8px 10px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;font-family:inherit;font-size:13px;min-width:140px;}
@@ -904,6 +914,13 @@ function setTabs(){
   document.getElementById('branchBar').classList.toggle('off', view!=='branch');
 }
 
+function itemMatchesSearch(it, query){
+  const q = (query||'').trim().toLocaleLowerCase();
+  if(!q) return true;
+  return [it.name,it.serial_no,it.asset_tag,it.assigned_to,it.status]
+    .some(v => String(v||'').toLocaleLowerCase().includes(q));
+}
+
 function renderBranch(){
   const content = document.getElementById('content');
   const visible = state.branches.filter(x=>!!x.archived===showArchived);
@@ -926,6 +943,8 @@ function renderBranch(){
       <button id="addItemBtn"><i class="fa-solid fa-plus"></i> Add item</button>
     </div>
     <div style="margin:-8px 0 16px"><button class="ghostbtn" id="addDetailBtn" style="margin-left:0"><i class="fa-solid fa-plus"></i> Add asset with details (serial, tag, status…)</button></div>`}
+    ${b.items.length ? `<div class="item-search-wrap"><input id="branchItemSearch" class="item-search" type="search" autocomplete="off" placeholder="Search this branch by item name, serial number, asset tag, or assigned person…" value="${escapeHtml(window.branchItemSearchQuery||'')}"><div class="search-hint">Searches item name, serial number, asset tag, assigned person, and status.</div></div>` : ''}
+    <div id="branchSearchCount" class="search-count" aria-live="polite"></div>
     <table class="itemtable">
       <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th></th><th></th></tr></thead>
       <tbody id="itemsBody"></tbody>
@@ -945,7 +964,12 @@ function renderBranch(){
   on('printLabelsBtn', ()=>printLabels(b));
   on('addDetailBtn', ()=>openItemModal(b, null));
   const tbody = document.getElementById('itemsBody');
-  b.items.forEach(it=>{
+  const drawBranchItems = (query='') => {
+    tbody.innerHTML = '';
+    const matches = b.items.filter(it=>itemMatchesSearch(it, query));
+    const count = document.getElementById('branchSearchCount');
+    if(count) count.textContent = query.trim() ? `${matches.length} matching item${matches.length===1?'':'s'}` : `${b.items.length} item record${b.items.length===1?'':'s'}`;
+    matches.forEach(it=>{
     const meta = [it.serial_no && `S/N ${it.serial_no}`, it.asset_tag && `Tag ${it.asset_tag}`, it.assigned_to && `Assigned: ${it.assigned_to}`].filter(Boolean).join(' · ');
     const isAsset = !!(it.serial_no || it.asset_tag);
     const ciBtn = ro ? '' : '<button class="ghostbtn" data-a="checkin" style="margin-left:0"><i class="fa-solid fa-clipboard-check"></i> Check in</button>';
@@ -958,7 +982,11 @@ function renderBranch(){
     h('rename', ()=>openItemModal(b, it)); h('inc', ()=>bumpItem(b, it, 1)); h('dec', ()=>bumpItem(b, it, -1)); h('del', ()=>deleteItem(b, it));
     h('checkin', ()=>openCheckinModal(b, it));
     tbody.appendChild(tr);
-  });
+    });
+  };
+  drawBranchItems(window.branchItemSearchQuery||'');
+  const branchSearch = document.getElementById('branchItemSearch');
+  if(branchSearch) branchSearch.addEventListener('input', e=>{ window.branchItemSearchQuery=e.target.value; drawBranchItems(e.target.value); });
   if(!ro){
     document.getElementById('addItemBtn').onclick = ()=>{
       const nameEl = content.querySelector('input[name=iname]');
@@ -987,10 +1015,34 @@ function renderOverview(){
       <div class="statcard"><div class="statn">${names.length}</div><div class="statl">Item types</div></div>
       <div class="statcard statcard-accent"><div class="statn">${grand}</div><div class="statl">Total units</div></div>
     </div>
+    <section class="rp-sec" style="margin-top:20px">
+      <h3><i class="fa-solid fa-magnifying-glass"></i> Search inventory</h3>
+      <div class="item-search-wrap"><input id="allItemSearch" class="item-search" type="search" autocomplete="off" placeholder="Search item name, serial number, asset tag, or assigned person…" value="${escapeHtml(window.allItemSearchQuery||'')}"><div class="search-hint">Searches all active branches. Select a result to open its branch.</div></div>
+      <div id="allItemSearchResults" class="search-results" aria-live="polite"></div>
+    </section>
+    <section class="rp-sec"><h3>Item type totals</h3>
     ${names.length===0 ? '<div class="empty"><i class="fa-solid fa-inbox"></i> No items logged anywhere yet.</div>' :
       names.map(n=>`<div class="overview-row"><span>${escapeHtml(n)}</span><span class="n">${totals[n]}</span></div>`).join('')}
     ${names.length ? `<div class="total">Grand total units: <b>${grand}</b></div>` : ''}
+    </section>
   `;
+  const drawSearchResults = query => {
+    const target = document.getElementById('allItemSearchResults');
+    if(!target) return;
+    const q = (query||'').trim();
+    if(!q){ target.innerHTML = '<div class="empty">Enter a search term to find inventory across branches.</div>'; return; }
+    const results = active.flatMap(b=>b.items.filter(it=>itemMatchesSearch(it,q)).map(it=>({branch:b,item:it})))
+      .sort((a,b)=>a.branch.name.localeCompare(b.branch.name)||a.item.name.localeCompare(b.item.name));
+    if(!results.length){ target.innerHTML = '<div class="empty">No matching items found.</div>'; return; }
+    target.innerHTML = `<div class="search-count">${results.length} matching record${results.length===1?'':'s'}</div><table class="audittable"><thead><tr><th>Branch</th><th>Item</th><th>Qty</th><th>Serial number</th><th>Asset tag</th><th>Assigned to</th><th>Status</th></tr></thead><tbody>${results.map(({branch:b,item:it},idx)=>`<tr data-search-result="${idx}" title="Open ${escapeHtml(b.name)}"><td>${escapeHtml(b.name)}</td><td>${escapeHtml(it.name)}</td><td>${Number(it.qty||0)}</td><td>${escapeHtml(it.serial_no||'—')}</td><td>${escapeHtml(it.asset_tag||'—')}</td><td>${escapeHtml(it.assigned_to||'—')}</td><td>${escapeHtml(it.status||'In use')}</td></tr>`).join('')}</tbody></table>`;
+    target.querySelectorAll('[data-search-result]').forEach(row=>row.addEventListener('click',()=>{
+      const result=results[Number(row.dataset.searchResult)]; if(!result) return;
+      selected=result.branch.id; showArchived=false; view='branch'; setTabs(); render();
+    }));
+  };
+  const search = document.getElementById('allItemSearch');
+  drawSearchResults(window.allItemSearchQuery||'');
+  if(search) search.addEventListener('input',e=>{ window.allItemSearchQuery=e.target.value; drawSearchResults(e.target.value); });
 }
 
 function statusPillClass(status){
