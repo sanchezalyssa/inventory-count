@@ -522,14 +522,14 @@ async function attemptLogin(){
   err.textContent = '';
   applySession(data.user);
   hideLogin();
-  await logAudit('login', `${currentUser} signed in`);
+  await logAudit('login', `${currentUser} signed in`, myBranchId);
   boot();
 }
 document.getElementById('loginBtn').onclick = attemptLogin;
 document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') attemptLogin(); });
 document.getElementById('loginUser').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('loginPass').focus(); });
 document.getElementById('logoutBtn').onclick = async ()=>{
-  await logAudit('logout', `${currentUser} signed out`);
+  await logAudit('logout', `${currentUser} signed out`, myBranchId);
   await sb.auth.signOut();
   location.reload();
 };
