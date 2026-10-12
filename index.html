@@ -558,9 +558,16 @@ function showBanner(msg){
   el.style.display = msg ? 'block' : 'none';
 }
 
-async function logAudit(action, details){
-  try{ const { error } = await sb.from('audit_log').insert({ app_user: currentUser || 'unknown', action, details }); if(error) throw error; }
-  catch(e){ console.error('audit log write failed', e); showBanner('Could not write to database: '+(e.message||JSON.stringify(e))); }
+async function logAudit(action, details, branchId=null){
+  try{
+    const entry = { app_user: currentUser || 'unknown', action, details };
+    if(branchId) entry.branch_id = branchId;
+    const { error } = await sb.from('audit_log').insert(entry);
+    if(error) throw error;
+  } catch(e){
+    console.error('audit log write failed', e);
+    showBanner('Could not write to database: '+(e.message||JSON.stringify(e)));
+  }
 }
 
 async function refreshAudit(){
@@ -620,12 +627,13 @@ const STATUSES = ['In use','In stock','For repair','Retired','Lost'];
 const ITEM_FIELDS = [['name','Name'],['qty','Qty'],['serial_no','Serial no.'],['asset_tag','Asset tag'],['status','Status'],['assigned_to','Assigned to'],['purchase_date','Purchase date'],['notes','Notes']];
 
 async function renameBranch(b){
+  if(!isAdmin()){ alert('Only administrators can rename branches.'); return; }
   const name = prompt('Rename branch:', b.name);
   if(!name || !name.trim() || name.trim()===b.name) return;
   const oldName = b.name;
   const { error } = await sb.from('branches').update({ name:name.trim() }).eq('id', b.id);
   if(error){ alert('Rename failed: '+error.message); return; }
-  await logAudit('rename_branch', `Renamed branch "${oldName}" to "${name.trim()}"`);
+  // A database trigger enforces admin-only renames and writes the authoritative audit entry.
   refreshAudit(); loadAllData();
 }
 
@@ -634,7 +642,7 @@ async function archiveBranch(b){
   if(!confirm(`Archive "${b.name}"? It is hidden from the list but all its items are kept. You can restore it anytime.`)) return;
   const { error } = await sb.from('branches').update({ archived:true }).eq('id', b.id);
   if(error){ alert('Archive failed: '+error.message); return; }
-  await logAudit('archive_branch', `Archived branch "${b.name}" (${b.items.length} item rows kept)`);
+  await logAudit('archive_branch', `Archived branch "${b.name}" (${b.items.length} item rows kept)`, b.id);
   selected = null;
   refreshAudit(); loadAllData();
 }
@@ -643,7 +651,7 @@ async function restoreBranch(b){
   if(!isAdmin()) return;
   const { error } = await sb.from('branches').update({ archived:false }).eq('id', b.id);
   if(error){ alert('Restore failed: '+error.message); return; }
-  await logAudit('restore_branch', `Restored branch "${b.name}"`);
+  await logAudit('restore_branch', `Restored branch "${b.name}"`, b.id);
   showArchived = false; selected = b.id; view = 'branch'; setTabs();
   refreshAudit(); loadAllData();
 }
@@ -654,7 +662,7 @@ async function deleteBranch(b){
   if(!(await takeSnapshot('pre-delete', false))) return;
   const { error } = await sb.from('branches').delete().eq('id', b.id);
   if(error){ alert('Delete failed: '+error.message); return; }
-  await logAudit('delete_branch', `Permanently deleted archived branch "${b.name}" (${b.items.length} item rows)`);
+  await logAudit('delete_branch', `Permanently deleted archived branch "${b.name}" (${b.items.length} item rows)`, b.id);
   selected = null;
   refreshAudit(); loadAllData();
 }
@@ -665,7 +673,7 @@ async function addBranchPrompt(){
   const { data, error } = await sb.from('branches').insert({ name:name.trim() }).select().single();
   if(error){ alert('Add branch failed: '+error.message); return; }
   showArchived = false; selected = data.id; view = 'branch'; setTabs();
-  await logAudit('add_branch', `Added branch "${data.name}"`);
+  await logAudit('add_branch', `Added branch "${data.name}"`, data.id);
   refreshAudit(); loadAllData();
 }
 
@@ -675,11 +683,11 @@ async function addItem(b, name, qty){
     const newQty = Number(existing.qty)+qty;
     const { error } = await sb.from('items').update({ qty:newQty, updated_at:new Date().toISOString() }).eq('id', existing.id);
     if(error){ alert('Update failed: '+error.message); return; }
-    await logAudit('add_item', `Added ${qty} to existing "${existing.name}" in ${b.name} → now ${newQty}`);
+    await logAudit('add_item', `Added ${qty} to existing "${existing.name}" in ${b.name} → now ${newQty}`, b.id);
   } else {
     const { error } = await sb.from('items').insert({ branch_id:b.id, name, qty });
     if(error){ alert('Add item failed: '+error.message); return; }
-    await logAudit('add_item', `Added new item "${name}" (qty ${qty}) to ${b.name}`);
+    await logAudit('add_item', `Added new item "${name}" (qty ${qty}) to ${b.name}`, b.id);
   }
   refreshAudit(); loadAllData();
 }
@@ -728,7 +736,7 @@ function openItemModal(b, it){
       msg = `Edited "${it.name}" in ${b.name} — ${diffs.join('; ')}`;
     }
     if(res.error){ err.textContent = 'Save failed: '+res.error.message; return; }
-    await logAudit(isNew?'add_item':'edit_item', msg);
+    await logAudit(isNew?'add_item':'edit_item', msg, b.id);
     await Promise.all([refreshAudit(), loadAllData()]);
     closeModal();
   };
@@ -738,14 +746,14 @@ async function bumpItem(b, it, delta){
   const newQty = Math.max(0, Number(it.qty)+delta);
   const { error } = await sb.from('items').update({ qty:newQty, updated_at:new Date().toISOString() }).eq('id', it.id);
   if(error){ alert('Update failed: '+error.message); return; }
-  await logAudit(delta>0?'increment':'decrement', `${delta>0?'+1':'-1'} "${it.name}" in ${b.name} → now ${newQty}`);
+  await logAudit(delta>0?'increment':'decrement', `${delta>0?'+1':'-1'} "${it.name}" in ${b.name} → now ${newQty}`, b.id);
   refreshAudit(); loadAllData();
 }
 
 async function deleteItem(b, it){
   const { error } = await sb.from('items').delete().eq('id', it.id);
   if(error){ alert('Delete failed: '+error.message); return; }
-  await logAudit('delete_item', `Removed "${it.name}" (qty ${it.qty}${it.asset_tag?', tag '+it.asset_tag:''}) from ${b.name}`);
+  await logAudit('delete_item', `Removed "${it.name}" (qty ${it.qty}${it.asset_tag?', tag '+it.asset_tag:''}) from ${b.name}`, b.id);
   refreshAudit(); loadAllData();
 }
 
@@ -859,9 +867,9 @@ function renderBranchList(){
     const adminBtn = !isAdmin() ? '' : (b.archived
       ? '<button class="editbtn" data-a="restore" title="Restore branch"><i class="fa-solid fa-rotate-left"></i></button>'
       : '<button class="editbtn" data-a="archive" title="Archive branch"><i class="fa-solid fa-box-archive"></i></button>');
-    row.innerHTML = `<span class="bname">${escapeHtml(b.name)}</span><span class="rowbtns"><button class="editbtn" data-a="edit" title="Rename"><i class="fa-solid fa-pen"></i></button>${adminBtn}<span class="cnt">${total}</span></span>`;
+    row.innerHTML = `<span class="bname">${escapeHtml(b.name)}</span><span class="rowbtns">${isAdmin() ? '<button class="editbtn" data-a="edit" title="Rename branch"><i class="fa-solid fa-pen"></i></button>' : ''}${adminBtn}<span class="cnt">${total}</span></span>`;
     row.onclick = ()=>{ selected=b.id; view='branch'; setTabs(); closeRail(); render(); };
-    row.querySelector('[data-a=edit]').onclick = (e)=>{ e.stopPropagation(); renameBranch(b); };
+    const edit = row.querySelector('[data-a=edit]'); if(edit) edit.onclick = (e)=>{ e.stopPropagation(); renameBranch(b); };
     const ab = row.querySelector('[data-a=archive]'); if(ab) ab.onclick = (e)=>{ e.stopPropagation(); archiveBranch(b); };
     const rb = row.querySelector('[data-a=restore]'); if(rb) rb.onclick = (e)=>{ e.stopPropagation(); restoreBranch(b); };
     list.appendChild(row);
@@ -892,8 +900,9 @@ function renderBranch(){
   const adminBtns = !isAdmin() ? '' : (ro
     ? '<button class="ghostbtn" id="restoreBtn"><i class="fa-solid fa-rotate-left"></i> Restore</button><button class="ghostbtn dangerbtn" id="purgeBtn"><i class="fa-solid fa-trash"></i> Delete permanently</button>'
     : `<button class="ghostbtn" id="archiveBtn"><i class="fa-solid fa-box-archive"></i> Archive</button>${b.items.length ? '<button class="ghostbtn" id="printLabelsBtn"><i class="fa-solid fa-tags"></i> Print labels</button>' : ''}`);
+  const branchEvents = auditCache.filter(e=>e.branch_id===b.id);
   content.innerHTML = `
-    <h2>${escapeHtml(b.name)} <button class="editbtn" id="editBranchName" title="Rename branch"><i class="fa-solid fa-pen"></i></button>${adminBtns}</h2>
+    <h2>${escapeHtml(b.name)} ${isAdmin() ? '<button class="editbtn" id="editBranchName" title="Rename branch"><i class="fa-solid fa-pen"></i></button>' : ''}${adminBtns}</h2>
     <div class="sub">ICT inventory for this branch</div>
     ${ro ? '<div class="archivedbanner">This branch is archived (read-only). Restore it to make changes.</div>' : `
     <div class="addrow">
@@ -908,8 +917,14 @@ function renderBranch(){
     </table>
     ${b.items.length===0 ? '<div class="empty">No items logged yet.</div>' : ''}
     <div class="total">Total units in ${escapeHtml(b.name)}: <b>${total}</b></div>
+    <section class="rp-sec" style="margin-top:28px">
+      <h3><i class="fa-solid fa-clock-rotate-left"></i> Branch Audit Log</h3>
+      <div class="sub">Recent activity recorded for this branch.</div>
+      ${branchEvents.length ? `<table class="audittable"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody>${branchEvents.map(e=>`<tr><td class="ts">${escapeHtml(fmtTs(e.ts))}</td><td class="user">${escapeHtml(e.app_user)}</td><td class="action">${escapeHtml(e.action)}</td><td>${escapeHtml(e.details||'')}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No branch activity logged yet. New activity will appear here after the database migration is applied.</div>'}
+    </section>
   `;
-  document.getElementById('editBranchName').onclick = ()=>renameBranch(b);
+  const editBranch = document.getElementById('editBranchName');
+  if(editBranch) editBranch.onclick = ()=>renameBranch(b);
   const on = (id, fn)=>{ const el = document.getElementById(id); if(el) el.onclick = fn; };
   on('archiveBtn', ()=>archiveBranch(b)); on('restoreBtn', ()=>restoreBranch(b)); on('purgeBtn', ()=>deleteBranch(b));
   on('printLabelsBtn', ()=>printLabels(b));
@@ -1031,7 +1046,7 @@ function openCheckinModal(b, it){
     const msg = diff===0
       ? `Checked in "${it.name}" at ${b.name} — count confirmed (${counted})${note?': '+note:''}`
       : `Checked in "${it.name}" at ${b.name} — count adjusted ${it.qty} → ${counted} (${diff>0?'+':''}${diff})${note?': '+note:''}`;
-    await logAudit('checkin', msg);
+    await logAudit('checkin', msg, b.id);
     closeModal(); refreshAudit(); loadAllData();
   };
 }
