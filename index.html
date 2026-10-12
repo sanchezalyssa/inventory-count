@@ -575,7 +575,8 @@ async function refreshAudit(){
   if(error){ console.error('audit fetch failed', error); showBanner('Could not load audit log: '+(error.message||JSON.stringify(error))); return; }
   showBanner(null);
   auditCache = data || [];
-  if(view==='audit') render();
+  // Refresh the visible branch detail too, so its audit log appears immediately on login/open.
+  if(view==='audit' || view==='branch') render();
 }
 
 // Supabase returns at most 1000 rows per request, so read big tables in pages.
