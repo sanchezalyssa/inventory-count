@@ -380,6 +380,15 @@ header h1 i{color:var(--accent);margin-right:2px;}
 .rp-actions{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px;}
 .rp-actions .ghostbtn{margin:0;}
 .rp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px;}
+.rp-graph{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin:0 0 24px;}
+.rp-graph h3{font-size:14px;margin:0 0 4px;font-weight:600;}
+.rp-graph-sub{font-size:11.5px;color:var(--text-dim);margin-bottom:14px;}
+.rp-bars{display:flex;flex-direction:column;gap:11px;}
+.rp-bar-row{display:grid;grid-template-columns:minmax(90px,170px) minmax(40px,1fr) 48px;align-items:center;gap:10px;}
+.rp-bar-label{font-size:12px;overflow-wrap:anywhere;color:var(--text);}
+.rp-bar-track{height:13px;background:var(--surface-2);border-radius:4px;overflow:hidden;}
+.rp-bar-fill{height:100%;background:var(--accent);border-radius:4px;min-width:0;}
+.rp-bar-value{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);}
 .rp-sec{margin-bottom:26px;}
 .rp-sec h3{font-size:14px;margin:0 0 8px;font-weight:600;}
 .rp-sec .empty{padding:14px 0;}
@@ -1456,6 +1465,40 @@ function buildReport(){
   return rpSummary();
 }
 
+function rpGraphData(rep){
+  if(rpType==='summary'){
+    return {title:'Units by branch', note:'Total inventory quantity in each active branch.', rows:rpScope().map(b=>({label:b.name,value:rpUnits(b.items)})).sort((a,b)=>b.value-a.value).slice(0,10)};
+  }
+  if(rpType==='status'){
+    const secs=rep.sections||[];
+    return {title:'Items by status',note:'Number of item rows in the selected status report.',rows:secs.map(s=>({label:s.title.replace(/ \(\d+\)$/,''),value:(s.rows||[]).length})).slice(0,10)};
+  }
+  if(rpType==='assigned'){
+    const items=rpRows().filter(i=>(i.assigned_to||'').trim());
+    const groups=rpGroup(items,i=>i.assigned_to).map(g=>({label:g.label,value:rpUnits(g.list)})).sort((a,b)=>b.value-a.value).slice(0,10);
+    return {title:'Assigned units by person',note:'Top 10 people by quantity of assigned inventory.',rows:groups};
+  }
+  if(rpType==='activity'){
+    const sec=(rep.sections||[]).find(s=>s.title==='By action');
+    return {title:'Activity by action',note:'Count of recorded actions in the selected date range.',rows:(sec?.rows||[]).map(r=>({label:r[0]||'Unknown',value:Number(r[1]||0)})).slice(0,10)};
+  }
+  if(rpType==='quality'){
+    return {title:'Data quality checks',note:'Number of records flagged by each check. A record may appear in more than one check.',rows:(rep.cards||[]).map(c=>({label:c.l,value:Number(c.n||0)})).slice(0,10)};
+  }
+  return {title:'Report overview',note:'No graph available for this report.',rows:[]};
+}
+function rpGraph(rep){
+  if(rep.loading) return '';
+  const graph=rpGraphData(rep), rows=graph.rows||[];
+  if(!rows.length) return `<section class="rp-graph"><h3>Visual overview</h3><div class="rp-graph-sub">${escapeHtml(graph.note||'')}</div><div class="empty">No data available to visualize yet.</div></section>`;
+  const max=Math.max(1,...rows.map(r=>Number(r.value)||0));
+  const bars=rows.map(r=>{
+    const value=Math.max(0,Number(r.value)||0), width=value===0?0:Math.max(2,(value/max)*100);
+    return `<div class="rp-bar-row"><div class="rp-bar-label" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div><div class="rp-bar-track"><div class="rp-bar-fill" style="width:${width.toFixed(2)}%"></div></div><div class="rp-bar-value">${escapeHtml(value)}</div></div>`;
+  }).join('');
+  return `<section class="rp-graph"><h3>${escapeHtml(graph.title||'Visual overview')}</h3><div class="rp-graph-sub">${escapeHtml(graph.note||'')}</div><div class="rp-bars">${bars}</div></section>`;
+}
+
 /* ----- rendering ----- */
 function rpTable(sec, cls, cap){
   const hdr = sec.header, rows = sec.rows;
@@ -1503,6 +1546,7 @@ function renderReports(){
   } else {
     body += `<div class="sub">${escapeHtml(rep.sub||'')}</div>`;
     body += `<div class="rp-cards">${rep.cards.map(c=>`<div class="statcard${c.accent?' statcard-accent':''}"><div class="statn">${escapeHtml(c.n)}</div><div class="statl">${escapeHtml(c.l)}</div></div>`).join('')}</div>`;
+    body += rpGraph(rep);
     body += rep.sections.map(sec=>rpTable(sec, 'audittable', RP_CAP)).join('');
   }
   content.innerHTML = `
