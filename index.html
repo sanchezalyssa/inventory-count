@@ -440,7 +440,6 @@ header h1 i{color:var(--accent);margin-right:2px;}
       <div class="tab" id="tabAll">All Items</div>
       <div class="tab" id="tabAudit">Audit Log</div>
       <div class="tab" id="tabBackups">Backups</div>
-      <div class="tab" id="tabOnLoan">On Loan</div>
       <div class="tab" id="tabReports">Reports</div>
     </div>
     <div class="hdr-actions">
@@ -482,7 +481,9 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const EMAIL_DOMAIN = '@ict.local';
 let currentUser = null;
 let currentRole = 'staff';
+let myBranchId = null; // set from the user's app_metadata.branch_id — locks the UI to one branch
 function isAdmin(){ return currentRole === 'admin'; }
+function isBranchLocked(){ return myBranchId != null; }
 
 function showLogin(){
   document.getElementById('loginOverlay').style.display = 'flex';
@@ -494,9 +495,16 @@ function hideLogin(){ document.getElementById('loginOverlay').style.display = 'n
 function applySession(user){
   currentUser = user.email;
   currentRole = (user.app_metadata && user.app_metadata.role) || 'staff';
+  const rawBranch = user.app_metadata && user.app_metadata.branch_id;
+  myBranchId = (rawBranch===undefined || rawBranch===null || rawBranch==='') ? null : Number(rawBranch);
   document.getElementById('userLabel').textContent = currentUser + (isAdmin() ? ' (admin)' : '');
-  document.getElementById('tabAudit').style.display = '';
   ['importBtn','templateBtn','toggleArchived','tabBackups'].forEach(id=>{ document.getElementById(id).style.display = isAdmin() ? '' : 'none'; });
+  // branch-tied accounts: hide everything that spans multiple branches, lock to their one branch
+  document.getElementById('tabAudit').style.display = isBranchLocked() ? 'none' : '';
+  ['tabAll','tabReports','exportBtn'].forEach(id=>{ const el = document.getElementById(id); if(el) el.style.display = isBranchLocked() ? 'none' : ''; });
+  const bar = document.getElementById('branchBar'); if(bar) bar.style.display = isBranchLocked() ? 'none' : '';
+  const rail = document.querySelector('.rail'); if(rail) rail.style.display = isBranchLocked() ? 'none' : '';
+  if(isBranchLocked()){ view = 'branch'; selected = myBranchId; }
 }
 
 async function attemptLogin(){
@@ -600,6 +608,7 @@ async function loadAllData(){
   state.branches = nestData(branches, items);
   const visible = state.branches.filter(b=>!!b.archived===showArchived);
   if(!selected || !visible.find(b=>b.id===selected)) selected = (visible[0] && visible[0].id) || null;
+  if(isBranchLocked()) selected = myBranchId; // re-assert even if the fetch somehow returned other branches
   const badge = document.getElementById('branchCountBadge');
   const active = state.branches.filter(b=>!b.archived).length;
   if(badge) badge.textContent = active + (active===1 ? ' BRANCH' : ' BRANCHES');
@@ -607,7 +616,7 @@ async function loadAllData(){
 }
 
 /* ---------- mutations ---------- */
-const STATUSES = ['In use','In stock','Checked out','For repair','Retired','Lost'];
+const STATUSES = ['In use','In stock','For repair','Retired','Lost'];
 const ITEM_FIELDS = [['name','Name'],['qty','Qty'],['serial_no','Serial no.'],['asset_tag','Asset tag'],['status','Status'],['assigned_to','Assigned to'],['purchase_date','Purchase date'],['notes','Notes']];
 
 async function renameBranch(b){
@@ -776,7 +785,13 @@ function openScanModal(){
   document.getElementById('scan_cancel').onclick = closeScanModal;
   if(typeof Html5Qrcode === 'undefined'){ document.getElementById('scan_err').textContent = 'Scanner library did not load — check your connection and try again.'; return; }
   scanner = new Html5Qrcode('qr-reader');
-  scanner.start({ facingMode:'environment' }, { fps:10, qrbox:220 }, onScanSuccess, ()=>{})
+  // continuous focus mode is honored on most Android/Chrome cameras; iOS Safari currently
+  // ignores it (no web API for focus control there), so it's a no-op on iPhone, not a bug
+  scanner.start(
+    { facingMode:'environment', advanced:[{ focusMode:'continuous' }] },
+    { fps:10, qrbox:220 },
+    onScanSuccess, ()=>{}
+  )
     .catch(err=>{ document.getElementById('scan_err').textContent = 'Could not open the camera: '+(err.message||err); });
 }
 function closeScanModal(){
@@ -829,7 +844,6 @@ function render(){
   if(view==='all') renderOverview();
   else if(view==='audit') renderAudit();
   else if(view==='backups') renderBackups();
-  else if(view==='onloan') renderOnLoan();
   else if(view==='reports') renderReports();
   else renderBranch();
 }
@@ -863,7 +877,6 @@ function setTabs(){
   document.getElementById('tabAll').classList.toggle('active', view==='all');
   document.getElementById('tabAudit').classList.toggle('active', view==='audit');
   document.getElementById('tabBackups').classList.toggle('active', view==='backups');
-  document.getElementById('tabOnLoan').classList.toggle('active', view==='onloan');
   document.getElementById('tabReports').classList.toggle('active', view==='reports');
   document.getElementById('branchBar').classList.toggle('off', view!=='branch');
 }
@@ -888,7 +901,7 @@ function renderBranch(){
       <input name="iqty" type="number" min="1" value="1" placeholder="Qty">
       <button id="addItemBtn"><i class="fa-solid fa-plus"></i> Add item</button>
     </div>
-    <div style="margin:-8px 0 16px"><button class="ghostbtn" id="addDetailBtn" style="margin-left:0"><i class="fa-solid fa-plus"></i> Add asset with details (serial, tag, status…)</button><button class="ghostbtn" id="checkoutPickBtn"><i class="fa-solid fa-right-from-bracket"></i> Check out an asset</button></div>`}
+    <div style="margin:-8px 0 16px"><button class="ghostbtn" id="addDetailBtn" style="margin-left:0"><i class="fa-solid fa-plus"></i> Add asset with details (serial, tag, status…)</button></div>`}
     <table class="itemtable">
       <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th></th><th></th></tr></thead>
       <tbody id="itemsBody"></tbody>
@@ -901,25 +914,19 @@ function renderBranch(){
   on('archiveBtn', ()=>archiveBranch(b)); on('restoreBtn', ()=>restoreBranch(b)); on('purgeBtn', ()=>deleteBranch(b));
   on('printLabelsBtn', ()=>printLabels(b));
   on('addDetailBtn', ()=>openItemModal(b, null));
-  on('checkoutPickBtn', ()=>openCheckoutPicker(b));
   const tbody = document.getElementById('itemsBody');
   b.items.forEach(it=>{
     const meta = [it.serial_no && `S/N ${it.serial_no}`, it.asset_tag && `Tag ${it.asset_tag}`, it.assigned_to && `Assigned: ${it.assigned_to}`].filter(Boolean).join(' · ');
     const isAsset = !!(it.serial_no || it.asset_tag);
-    const checkedOut = it.status === 'Checked out';
-    let coBtn = '';
-    if(!ro){
-      if(checkedOut) coBtn = '<button class="ghostbtn" data-a="checkin" style="margin-left:0"><i class="fa-solid fa-arrow-right-to-bracket"></i> Check in</button>';
-      else if(Number(it.qty) > 0) coBtn = '<button class="ghostbtn" data-a="checkout" style="margin-left:0"><i class="fa-solid fa-right-from-bracket"></i> Check out</button>';
-    }
+    const ciBtn = ro ? '' : '<button class="ghostbtn" data-a="checkin" style="margin-left:0"><i class="fa-solid fa-clipboard-check"></i> Check in</button>';
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><span class="itemname">${escapeHtml(it.name)}</span>${ro?'':' <button class="editbtn" data-a="rename" title="Edit details"><i class="fa-solid fa-pen"></i></button>'}${it.status && it.status!=='In use' ? `<span class="${statusPillClass(it.status)}">${escapeHtml(it.status)}</span>` : ''}${meta ? `<div class="itemmeta">${escapeHtml(meta)}</div>` : ''}${coBtn ? `<div style="margin-top:6px">${coBtn}</div>` : ''}</td>
+    tr.innerHTML = `<td><span class="itemname">${escapeHtml(it.name)}</span>${ro?'':' <button class="editbtn" data-a="rename" title="Edit details"><i class="fa-solid fa-pen"></i></button>'}${it.status && it.status!=='In use' ? `<span class="${statusPillClass(it.status)}">${escapeHtml(it.status)}</span>` : ''}${meta ? `<div class="itemmeta">${escapeHtml(meta)}</div>` : ''}${ciBtn ? `<div style="margin-top:6px">${ciBtn}</div>` : ''}</td>
       <td class="qty">${it.qty}</td>
       <td class="actions">${ro?'':'<button class="qtybtn" data-a="dec"><i class="fa-solid fa-minus"></i></button> <button class="qtybtn" data-a="inc"><i class="fa-solid fa-plus"></i></button>'}</td>
       <td class="actions">${ro?'':'<button class="del" data-a="del"><i class="fa-solid fa-trash"></i> remove</button>'}</td>`;
     const h = (a, fn)=>{ const el = tr.querySelector(`[data-a=${a}]`); if(el) el.onclick = fn; };
     h('rename', ()=>openItemModal(b, it)); h('inc', ()=>bumpItem(b, it, 1)); h('dec', ()=>bumpItem(b, it, -1)); h('del', ()=>deleteItem(b, it));
-    h('checkout', ()=>openCheckoutModal(b, it)); h('checkin', ()=>checkInItem(b, it));
+    h('checkin', ()=>openCheckinModal(b, it));
     tbody.appendChild(tr);
   });
   if(!ro){
@@ -995,149 +1002,39 @@ function renderAudit(){
   content.querySelectorAll('.chip').forEach(c=>{ c.onclick = ()=>{ auditUser = c.dataset.u; renderAudit(); }; });
 }
 
-/* ---------- Check-out / Check-in (serialized assets) ---------- */
-function overdue(due){ return due && due < new Date().toISOString().slice(0,10); }
-
+/* ---------- Check-in (presence / count verification) ---------- */
 function itemLabel(it){ return it.name + (it.asset_tag?' — Tag '+it.asset_tag:(it.serial_no?' — S/N '+it.serial_no:'')); }
 
-async function submitCheckout(b, it, to, due, note, qtyRaw, err){
-  if(!to){ if(err) err.textContent = 'Enter who this is being checked out to.'; return false; }
-  const qty = Math.max(1, Number(qtyRaw)||1);
-  if(qty > Number(it.qty)){ if(err) err.textContent = `Only ${it.qty} on hand.`; return false; }
-  const newQty = Number(it.qty) - qty;
-  const patch = { qty:newQty, updated_at:new Date().toISOString() };
-  if(newQty === 0){ patch.status = 'Checked out'; patch.assigned_to = to; } // fully out: show it on the row
-  const { error: ue } = await sb.from('items').update(patch).eq('id', it.id);
-  if(ue){ if(err) err.textContent = 'Save failed: '+ue.message; return false; }
-  const { error: ce } = await sb.from('checkouts').insert({ item_id:it.id, branch_id:b.id, branch_name:b.name, item_name:it.name, serial_no:it.serial_no||null, asset_tag:it.asset_tag||null, checked_out_to:to, checked_out_by:currentUser, due_date:due, note, qty });
-  if(ce && err) err.textContent = 'Saved item, but the loan record failed: '+ce.message;
-  closeModal();
-  const label = (qty>1?qty+' x ':'') + it.name;
-  await logAudit('checkout', `Checked out ${label}${it.asset_tag?' (tag '+it.asset_tag+')':(it.serial_no?' (S/N '+it.serial_no+')':'')} from ${b.name} to ${to}${due?', due '+due:''}`);
-  refreshAudit(); loadAllData(); if(view==='onloan') refreshLoans();
-  return true;
+function checkinFormHtml(it){
+  return `<label>Counted quantity <span class="sub2">(currently ${it.qty} on record)</span><input id="ci_qty" type="number" min="0" value="${it.qty}"></label>
+    <label style="margin-top:10px">Note (optional)<textarea id="ci_note" rows="2" placeholder="Condition, location, etc."></textarea></label>
+    <div class="loginerr" id="ci_err"></div>
+    <div class="mactions"><button class="ghostbtn" id="ci_cancel">Cancel</button><button class="primary-btn" id="ci_save"><i class="fa-solid fa-clipboard-check"></i> Check in</button></div>`;
 }
 
-function checkoutFormHtml(b, qtyMax){
-  return `<label>Qty to check out <span class="sub2">(of ${qtyMax} on hand)</span><input id="co_qty" type="number" min="1" max="${qtyMax}" value="1"></label>
-    <label style="margin-top:10px">Checked out to<input id="co_to" placeholder="Name of person"></label>
-    <div class="grid2" style="margin-top:10px">
-      <label>Due back (optional)<input id="co_due" type="date"></label>
-      <label>Branch<input value="${escapeHtml(b.name)}" disabled></label>
-    </div>
-    <label>Note (optional)<textarea id="co_note" rows="2" placeholder="Purpose, condition, etc."></textarea></label>
-    <div class="loginerr" id="co_err"></div>
-    <div class="mactions"><button class="ghostbtn" id="co_cancel">Cancel</button><button class="primary-btn" id="co_save"><i class="fa-solid fa-right-from-bracket"></i> Check out</button></div>`;
-}
-
-function openCheckoutModal(b, it){
+function openCheckinModal(b, it){
   const ov = document.getElementById('modalOverlay');
-  ov.innerHTML = `<div class="modalbox"><h3>Check out<span class="sub2">${escapeHtml(itemLabel(it))}</span></h3>${checkoutFormHtml(b, it.qty)}</div>`;
+  ov.innerHTML = `<div class="modalbox"><h3>Check in<span class="sub2">${escapeHtml(itemLabel(it))}</span></h3>${checkinFormHtml(it)}</div>`;
   ov.style.display = 'flex';
   ov.onclick = e=>{ if(e.target===ov) closeModal(); };
-  document.getElementById('co_cancel').onclick = closeModal;
-  document.getElementById('co_save').onclick = ()=>{
-    const err = document.getElementById('co_err');
-    submitCheckout(b, it, document.getElementById('co_to').value.trim(), document.getElementById('co_due').value || null, document.getElementById('co_note').value.trim() || null, document.getElementById('co_qty').value, err);
+  document.getElementById('ci_cancel').onclick = closeModal;
+  document.getElementById('ci_save').onclick = async ()=>{
+    const err = document.getElementById('ci_err');
+    const counted = Number(document.getElementById('ci_qty').value);
+    const note = document.getElementById('ci_note').value.trim();
+    if(!Number.isFinite(counted) || counted < 0){ err.textContent = 'Enter a valid quantity.'; return; }
+    const diff = counted - Number(it.qty);
+    if(diff !== 0){
+      const { error } = await sb.from('items').update({ qty:counted, updated_at:new Date().toISOString() }).eq('id', it.id);
+      if(error){ err.textContent = 'Save failed: '+error.message; return; }
+    }
+    const msg = diff===0
+      ? `Checked in "${it.name}" at ${b.name} — count confirmed (${counted})${note?': '+note:''}`
+      : `Checked in "${it.name}" at ${b.name} — count adjusted ${it.qty} → ${counted} (${diff>0?'+':''}${diff})${note?': '+note:''}`;
+    await logAudit('checkin', msg);
+    closeModal(); refreshAudit(); loadAllData();
   };
 }
-
-function openCheckoutPicker(b){
-  const eligible = b.items.filter(it => Number(it.qty) > 0);
-  if(!eligible.length){ alert('Nothing in this branch is currently available to check out.'); return; }
-  const ov = document.getElementById('modalOverlay');
-  const optHtml = eligible.map(it=>`<option value="${it.id}" data-max="${it.qty}">${escapeHtml(itemLabel(it))} (${it.qty} on hand)</option>`).join('');
-  ov.innerHTML = `<div class="modalbox">
-    <h3>Check out<span class="sub2">${escapeHtml(b.name)}</span></h3>
-    <label>Which item<select id="co_item">${optHtml}</select></label>
-    <div id="co_form" style="margin-top:10px"></div>
-  </div>`;
-  ov.style.display = 'flex';
-  ov.onclick = e=>{ if(e.target===ov) closeModal(); };
-  const sel = document.getElementById('co_item');
-  const wire = ()=>{
-    const it = eligible.find(x=>x.id===sel.value);
-    document.getElementById('co_form').innerHTML = checkoutFormHtml(b, it.qty);
-    document.getElementById('co_cancel').onclick = closeModal;
-    document.getElementById('co_save').onclick = ()=>{
-      const err = document.getElementById('co_err');
-      submitCheckout(b, it, document.getElementById('co_to').value.trim(), document.getElementById('co_due').value || null, document.getElementById('co_note').value.trim() || null, document.getElementById('co_qty').value, err);
-    };
-  };
-  sel.onchange = wire; wire();
-}
-
-async function checkInItem(b, it){
-  const { data: rows, error: fe } = await sb.from('checkouts').select('*').eq('item_id', it.id).is('returned_at', null).order('checked_out_at', { ascending:false }).limit(1);
-  if(fe){ alert('Could not look up the loan record: '+fe.message); return; }
-  if(!rows || !rows[0]){ alert('No open loan record found for this item.'); return; }
-  checkInRecordById(rows[0]);
-}
-
-async function checkInRecordById(r){
-  const label = (r.qty>1?r.qty+' x ':'') + r.item_name;
-  if(!confirm(`Check in ${label} from ${r.checked_out_to}?`)) return;
-  const { data: itRows } = await sb.from('items').select('id,qty,status').eq('id', r.item_id).limit(1);
-  if(itRows && itRows[0]){
-    const newQty = Number(itRows[0].qty) + Number(r.qty||1);
-    const patch = { qty:newQty, updated_at:new Date().toISOString() };
-    if(itRows[0].status === 'Checked out'){ patch.status = 'In use'; patch.assigned_to = null; } // was fully out, now something's back
-    await sb.from('items').update(patch).eq('id', r.item_id);
-  }
-  await sb.from('checkouts').update({ returned_at:new Date().toISOString(), returned_by:currentUser }).eq('id', r.id);
-  await logAudit('checkin', `Checked in ${label} to ${r.branch_name} (was out to ${r.checked_out_to})`);
-  refreshAudit(); loadAllData(); refreshLoans();
-}
-
-async function refreshLoans(){
-  let q = sb.from('checkouts').select('*').order('checked_out_at', { ascending:false }).limit(500);
-  if(!showReturned) q = q.is('returned_at', null);
-  const { data, error } = await q;
-  if(error){
-    loanList = [];
-    document.getElementById('content').innerHTML = `<h2>On Loan</h2><div class="archivedbanner">Could not load loan records: ${escapeHtml(error.message)}. Make sure the checkouts SQL script has been run.</div>`;
-    return;
-  }
-  loanList = data || [];
-  if(view==='onloan') renderOnLoan();
-}
-
-function renderOnLoan(){
-  const content = document.getElementById('content');
-  content.innerHTML = `
-    <h2>On Loan</h2>
-    <div class="sub">Serialized/tagged assets currently checked out, and their return history.</div>
-    <div class="chips"><button class="chip${showReturned?'':' on'}" id="loanActiveBtn">Active</button><button class="chip${showReturned?' on':''}" id="loanAllBtn">Include returned</button></div>
-    ${loanList.length===0 ? `<div class="empty">${showReturned?'No loan history yet.':'Nothing is currently checked out.'}</div>` : `
-    <table class="audittable">
-      <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th>Branch</th><th>To</th><th>By</th><th>Out</th><th>Due</th><th>Returned</th>${showReturned?'':'<th></th>'}</tr></thead>
-      <tbody>${loanList.map(r=>{
-        const od = !r.returned_at && overdue(r.due_date);
-        return `<tr>
-          <td>${escapeHtml(r.item_name)}${r.asset_tag?' <span class="itemmeta">'+escapeHtml(r.asset_tag)+'</span>':(r.serial_no?' <span class="itemmeta">S/N '+escapeHtml(r.serial_no)+'</span>':'')}</td>
-          <td class="qty">${r.qty||1}</td>
-          <td>${escapeHtml(r.branch_name)}</td>
-          <td>${escapeHtml(r.checked_out_to)}</td>
-          <td class="user">${escapeHtml(r.checked_out_by||'')}</td>
-          <td class="ts">${escapeHtml(fmtTs(r.checked_out_at))}</td>
-          <td class="ts" style="${od?'color:var(--danger);font-weight:600':''}">${r.due_date?escapeHtml(r.due_date)+(od?' (overdue)':''):'—'}</td>
-          <td class="ts">${r.returned_at?escapeHtml(fmtTs(r.returned_at)):'—'}</td>
-          ${showReturned?'':`<td style="text-align:right"><button class="ghostbtn" data-recid="${r.id}">Check in</button></td>`}
-        </tr>`;
-      }).join('')}</tbody>
-    </table>`}
-  `;
-  document.getElementById('loanActiveBtn').onclick = ()=>{ if(showReturned){ showReturned=false; refreshLoans(); } };
-  document.getElementById('loanAllBtn').onclick = ()=>{ if(!showReturned){ showReturned=true; refreshLoans(); } };
-  content.querySelectorAll('[data-recid]').forEach(btn=>{
-    btn.onclick = ()=>{
-      const r = loanList.find(x=>String(x.id)===btn.dataset.recid);
-      if(r) checkInRecordById(r);
-    };
-  });
-}
-
-document.getElementById('tabOnLoan').onclick = ()=>{ view='onloan'; setTabs(); renderBranchList(); refreshLoans(); };
 
 /* ---------- Excel export / import ---------- */
 function makeSheet(rows, header, widths){
@@ -1385,12 +1282,12 @@ async function deleteBackup(id){
 document.getElementById('tabBackups').onclick = ()=>{ view='backups'; setTabs(); renderBranchList(); refreshBackups(); };
 
 /* ---------- Reports ---------- */
-const RP_TYPES = [['summary','Inventory summary'],['status','Assets by status'],['assigned','Assigned to'],['loans','Loans'],['activity','Activity'],['quality','Data quality']];
+const RP_TYPES = [['summary','Inventory summary'],['status','Assets by status'],['assigned','Assigned to'],['activity','Activity'],['quality','Data quality']];
 const RP_CAP = 500;
-let rpType = 'summary', rpBranch = '', rpStatus = 'action', rpLoanMode = 'all';
+let rpType = 'summary', rpBranch = '', rpStatus = 'action';
 let rpFrom = '', rpTo = '', rpHideSess = true;
-let rpLoans = null, rpAudit = null, rpAuditKey = '', rpErr = '';
-const rpPending = { loans:false, audit:null };
+let rpAudit = null, rpAuditKey = '', rpErr = '';
+const rpPending = { audit:null };
 
 function localDay(v){
   const d = new Date(v); if(isNaN(d)) return '';
@@ -1480,37 +1377,6 @@ function rpAssigned(){
   };
 }
 
-function rpLoansReport(){
-  if(rpLoans===null) return { loading:true };
-  const out = r=>!r.returned_at;
-  const over = r=>out(r) && r.due_date && overdue(r.due_date);
-  const inRange = r=>{ const d = localDay(r.checked_out_at); return (!rpFrom||d>=rpFrom) && (!rpTo||d<=rpTo); };
-  const retInRange = r=>{ if(!r.returned_at) return false; const d = localDay(r.returned_at); return (!rpFrom||d>=rpFrom) && (!rpTo||d<=rpTo); };
-  const all = rpLoans.filter(r=>!rpBranch || String(r.branch_id)===rpBranch);
-  let list;
-  if(rpLoanMode==='active') list = all.filter(out);
-  else if(rpLoanMode==='overdue') list = all.filter(over);
-  else list = all.filter(inRange);
-  const header = ['Item','Serial / tag','Qty','Branch','Checked out to','Checked out by','Out','Due','Returned','Status'];
-  const rows = list.map(r=>[
-    r.item_name, r.asset_tag||r.serial_no||'', Number(r.qty||1), r.branch_name, r.checked_out_to, r.checked_out_by||'',
-    r.checked_out_at?fmtTs(r.checked_out_at):'', r.due_date||'', r.returned_at?fmtTs(r.returned_at):'',
-    r.returned_at ? 'Returned' : (over(r) ? 'Overdue' : 'Out')
-  ]);
-  const byItem = rpGroup(list, r=>r.item_name).map(g=>[g.label, g.list.length, g.list.reduce((s,r)=>s+Number(r.qty||1),0)]).sort((a,b)=>b[1]-a[1]);
-  const byPerson = rpGroup(list, r=>r.checked_out_to).map(g=>[g.label, g.list.length, g.list.filter(out).length]).sort((a,b)=>b[1]-a[1]);
-  const modeLabel = rpLoanMode==='active' ? 'currently out (any date)' : rpLoanMode==='overdue' ? 'overdue (any date)' : 'checked out between '+rpRangeLabel();
-  return {
-    title:'Loans', sub:'Scope: '+rpBranchLabel()+' · Showing: '+modeLabel,
-    cards:[{n:all.filter(out).length,l:'Currently out'},{n:all.filter(over).length,l:'Overdue'},{n:all.filter(inRange).length,l:'Checked out in range'},{n:all.filter(retInRange).length,l:'Returned in range'}],
-    sections:[
-      { title:'Loan records ('+rows.length+')', header, rows, empty:'No loans match these filters.' },
-      { title:'Most borrowed items', header:['Item','Times borrowed','Units'], rows:byItem, empty:'No loans match these filters.' },
-      { title:'By person', header:['Person','Loans','Still out'], rows:byPerson, empty:'No loans match these filters.' }
-    ]
-  };
-}
-
 function rpActivityReport(){
   if(rpAudit===null || rpAuditKey!==rpFrom+'|'+rpTo) return { loading:true };
   const rows = rpAudit.filter(e=>!(rpHideSess && (e.action==='login' || e.action==='logout')));
@@ -1564,7 +1430,6 @@ function rpQuality(){
 function buildReport(){
   if(rpType==='status') return rpStatusReport();
   if(rpType==='assigned') return rpAssigned();
-  if(rpType==='loans') return rpLoansReport();
   if(rpType==='activity') return rpActivityReport();
   if(rpType==='quality') return rpQuality();
   return rpSummary();
@@ -1596,10 +1461,7 @@ function rpControls(){
   if(rpType==='status'){
     h += `<label>Status<select id="rpStatusSel"><option value="action"${rpStatus==='action'?' selected':''}>Needs attention (repair, lost, retired, checked out)</option>${STATUSES.map(s=>`<option value="${escapeHtml(s)}"${rpStatus===s?' selected':''}>${escapeHtml(s)}</option>`).join('')}</select></label>`;
   }
-  if(rpType==='loans'){
-    h += `<label>Show<select id="rpModeSel"><option value="all"${rpLoanMode==='all'?' selected':''}>Checked out in date range</option><option value="active"${rpLoanMode==='active'?' selected':''}>Currently out (any date)</option><option value="overdue"${rpLoanMode==='overdue'?' selected':''}>Overdue (any date)</option></select></label>`;
-  }
-  if(rpType==='loans' || rpType==='activity'){
+  if(rpType==='activity'){
     h += `<label>From<input type="date" id="rpFromIn" value="${escapeHtml(rpFrom)}"></label><label>To<input type="date" id="rpToIn" value="${escapeHtml(rpTo)}"></label>`;
   }
   if(rpType==='activity'){
@@ -1611,7 +1473,7 @@ function rpControls(){
 function renderReports(){
   const content = document.getElementById('content');
   const rep = buildReport();
-  const needsFetch = rpType==='loans' || rpType==='activity';
+  const needsFetch = rpType==='activity';
   let body;
   if(rpErr) body = `<div class="archivedbanner">${escapeHtml(rpErr)}</div>`;
   else body = '';
@@ -1638,7 +1500,6 @@ function renderReports(){
   content.querySelectorAll('#rpTypes .chip').forEach(c=>{ c.onclick = ()=>{ rpType = c.dataset.r; rpErr = ''; renderReports(); rpLoad(); }; });
   if($('rpBranchSel')) $('rpBranchSel').onchange = e=>{ rpBranch = e.target.value; renderReports(); };
   if($('rpStatusSel')) $('rpStatusSel').onchange = e=>{ rpStatus = e.target.value; renderReports(); };
-  if($('rpModeSel')) $('rpModeSel').onchange = e=>{ rpLoanMode = e.target.value; renderReports(); };
   if($('rpFromIn')) $('rpFromIn').onchange = e=>{ rpFrom = e.target.value; renderReports(); rpLoad(); };
   if($('rpToIn')) $('rpToIn').onchange = e=>{ rpTo = e.target.value; renderReports(); rpLoad(); };
   if($('rpSessChk')) $('rpSessChk').onchange = e=>{ rpHideSess = e.target.checked; renderReports(); };
@@ -1647,7 +1508,7 @@ function renderReports(){
   $('rpPrint').onclick = printReport;
 }
 
-/* ----- data loading for loans / activity ----- */
+/* ----- data loading for activity ----- */
 async function rpPaged(make){
   let all = [], from = 0; const size = 1000;
   while(true){
@@ -1662,18 +1523,7 @@ async function rpPaged(make){
 }
 
 async function rpLoad(force){
-  if(rpType==='loans'){
-    if(!force && rpLoans!==null) return;
-    if(rpPending.loans) return;
-    rpPending.loans = true; if(force) rpLoans = null;
-    try{
-      rpLoans = await rpPaged(()=>sb.from('checkouts').select('*').order('checked_out_at', { ascending:false }).order('id'));
-    }catch(e){
-      console.error('loan report failed', e);
-      rpErr = 'Could not load loan records: ' + (e.message || e) + '. Make sure the checkouts SQL script has been run.';
-      rpLoans = [];
-    }finally{ rpPending.loans = false; }
-  } else if(rpType==='activity'){
+  if(rpType==='activity'){
     const key = rpFrom+'|'+rpTo;
     if(!force && rpAudit!==null && rpAuditKey===key) return;
     if(rpPending.audit===key) return;
@@ -1801,7 +1651,6 @@ if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
 }
 
 /* ---------- boot ---------- */
-let loanList = []; let showReturned = false;
 let subscribed = false;
 async function boot(){
   render();
