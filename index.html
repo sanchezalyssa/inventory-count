@@ -373,16 +373,6 @@ header h1 i{color:var(--accent);margin-right:2px;}
 }
 
 /* ===== reports ===== */
-/* inventory search */
-.item-search-wrap{margin:14px 0 12px;max-width:620px;}
-.item-search{display:block;width:100%;padding:11px 13px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font:inherit;outline:none;}
-.item-search:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent);}
-.search-hint{font-size:11.5px;color:var(--text-dim);margin-top:5px;}
-.search-results{margin:8px 0 18px;overflow-x:auto;}
-.search-results table{width:100%;border-collapse:collapse;}
-.search-results tbody tr{cursor:pointer;}
-.search-results tbody tr:hover{background:var(--surface-2);}
-.search-count{font-size:12px;color:var(--text-dim);margin:8px 0;}
 .rp-filters{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;margin:4px 0 12px;}
 .rp-filters label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--text-dim);}
 .rp-filters select,.rp-filters input[type=date]{padding:8px 10px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;font-family:inherit;font-size:13px;min-width:140px;}
@@ -390,15 +380,6 @@ header h1 i{color:var(--accent);margin-right:2px;}
 .rp-actions{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px;}
 .rp-actions .ghostbtn{margin:0;}
 .rp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px;}
-.rp-graph{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin:0 0 24px;}
-.rp-graph h3{font-size:14px;margin:0 0 4px;font-weight:600;}
-.rp-graph-sub{font-size:11.5px;color:var(--text-dim);margin-bottom:14px;}
-.rp-bars{display:flex;flex-direction:column;gap:11px;}
-.rp-bar-row{display:grid;grid-template-columns:minmax(90px,170px) minmax(40px,1fr) 48px;align-items:center;gap:10px;}
-.rp-bar-label{font-size:12px;overflow-wrap:anywhere;color:var(--text);}
-.rp-bar-track{height:13px;background:var(--surface-2);border-radius:4px;overflow:hidden;}
-.rp-bar-fill{height:100%;background:var(--accent);border-radius:4px;min-width:0;}
-.rp-bar-value{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);}
 .rp-sec{margin-bottom:26px;}
 .rp-sec h3{font-size:14px;margin:0 0 8px;font-weight:600;}
 .rp-sec .empty{padding:14px 0;}
@@ -459,6 +440,7 @@ header h1 i{color:var(--accent);margin-right:2px;}
       <div class="tab" id="tabAll">All Items</div>
       <div class="tab" id="tabAudit">Audit Log</div>
       <div class="tab" id="tabBackups">Backups</div>
+      <div class="tab" id="tabOnLoan">On Loan</div>
       <div class="tab" id="tabReports">Reports</div>
     </div>
     <div class="hdr-actions">
@@ -500,9 +482,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const EMAIL_DOMAIN = '@ict.local';
 let currentUser = null;
 let currentRole = 'staff';
-let myBranchId = null; // set from the user's app_metadata.branch_id — locks the UI to one branch
 function isAdmin(){ return currentRole === 'admin'; }
-function isBranchLocked(){ return myBranchId != null; }
 
 function showLogin(){
   document.getElementById('loginOverlay').style.display = 'flex';
@@ -514,16 +494,9 @@ function hideLogin(){ document.getElementById('loginOverlay').style.display = 'n
 function applySession(user){
   currentUser = user.email;
   currentRole = (user.app_metadata && user.app_metadata.role) || 'staff';
-  const rawBranch = user.app_metadata && user.app_metadata.branch_id;
-  myBranchId = (rawBranch===undefined || rawBranch===null || rawBranch==='') ? null : String(rawBranch);
   document.getElementById('userLabel').textContent = currentUser + (isAdmin() ? ' (admin)' : '');
+  document.getElementById('tabAudit').style.display = '';
   ['importBtn','templateBtn','toggleArchived','tabBackups'].forEach(id=>{ document.getElementById(id).style.display = isAdmin() ? '' : 'none'; });
-  // branch-tied accounts: hide everything that spans multiple branches, lock to their one branch
-  document.getElementById('tabAudit').style.display = isBranchLocked() ? 'none' : '';
-  ['tabAll','tabReports','exportBtn'].forEach(id=>{ const el = document.getElementById(id); if(el) el.style.display = isBranchLocked() ? 'none' : ''; });
-  const bar = document.getElementById('branchBar'); if(bar) bar.style.display = isBranchLocked() ? 'none' : '';
-  const rail = document.querySelector('.rail'); if(rail) rail.style.display = isBranchLocked() ? 'none' : '';
-  if(isBranchLocked()){ view = 'branch'; selected = myBranchId; }
 }
 
 async function attemptLogin(){
@@ -541,14 +514,14 @@ async function attemptLogin(){
   err.textContent = '';
   applySession(data.user);
   hideLogin();
-  await logAudit('login', `${currentUser} signed in`, myBranchId);
+  await logAudit('login', `${currentUser} signed in`);
   boot();
 }
 document.getElementById('loginBtn').onclick = attemptLogin;
 document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') attemptLogin(); });
 document.getElementById('loginUser').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('loginPass').focus(); });
 document.getElementById('logoutBtn').onclick = async ()=>{
-  await logAudit('logout', `${currentUser} signed out`, myBranchId);
+  await logAudit('logout', `${currentUser} signed out`);
   await sb.auth.signOut();
   location.reload();
 };
@@ -577,16 +550,9 @@ function showBanner(msg){
   el.style.display = msg ? 'block' : 'none';
 }
 
-async function logAudit(action, details, branchId=null){
-  try{
-    const entry = { app_user: currentUser || 'unknown', action, details };
-    if(branchId) entry.branch_id = branchId;
-    const { error } = await sb.from('audit_log').insert(entry);
-    if(error) throw error;
-  } catch(e){
-    console.error('audit log write failed', e);
-    showBanner('Could not write to database: '+(e.message||JSON.stringify(e)));
-  }
+async function logAudit(action, details){
+  try{ const { error } = await sb.from('audit_log').insert({ app_user: currentUser || 'unknown', action, details }); if(error) throw error; }
+  catch(e){ console.error('audit log write failed', e); showBanner('Could not write to database: '+(e.message||JSON.stringify(e))); }
 }
 
 async function refreshAudit(){
@@ -594,8 +560,7 @@ async function refreshAudit(){
   if(error){ console.error('audit fetch failed', error); showBanner('Could not load audit log: '+(error.message||JSON.stringify(error))); return; }
   showBanner(null);
   auditCache = data || [];
-  // Refresh the visible branch detail too, so its audit log appears immediately on login/open.
-  if(view==='audit' || view==='branch') render();
+  if(view==='audit') render();
 }
 
 // Supabase returns at most 1000 rows per request, so read big tables in pages.
@@ -632,15 +597,9 @@ async function loadAllData(){
     return;
   }
   showBanner(null);
-  // Branch IDs are UUIDs. Keep branch-tied accounts scoped to their assigned branch.
-  // Database RLS must also enforce this; this client-side filter is only the UI layer.
-  const scopedBranches = isBranchLocked() ? (branches||[]).filter(b=>String(b.id)===String(myBranchId)) : (branches||[]);
-  const allowedBranchIds = new Set(scopedBranches.map(b=>String(b.id)));
-  const scopedItems = isBranchLocked() ? (items||[]).filter(it=>allowedBranchIds.has(String(it.branch_id))) : (items||[]);
-  state.branches = nestData(scopedBranches, scopedItems);
+  state.branches = nestData(branches, items);
   const visible = state.branches.filter(b=>!!b.archived===showArchived);
   if(!selected || !visible.find(b=>b.id===selected)) selected = (visible[0] && visible[0].id) || null;
-  if(isBranchLocked()) selected = myBranchId; // re-assert even if the fetch somehow returned other branches
   const badge = document.getElementById('branchCountBadge');
   const active = state.branches.filter(b=>!b.archived).length;
   if(badge) badge.textContent = active + (active===1 ? ' BRANCH' : ' BRANCHES');
@@ -648,17 +607,60 @@ async function loadAllData(){
 }
 
 /* ---------- mutations ---------- */
-const STATUSES = ['In use','In stock','For repair','Retired','Lost'];
+const STATUSES = ['In use','In stock','Checked out','For repair','Retired','Lost'];
 const ITEM_FIELDS = [['name','Name'],['qty','Qty'],['serial_no','Serial no.'],['asset_tag','Asset tag'],['status','Status'],['assigned_to','Assigned to'],['purchase_date','Purchase date'],['notes','Notes']];
 
+/* re-check the signed-in user's password without touching the real session */
+async function verifyPassword(pw){
+  const tmp = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth:{ persistSession:false, autoRefreshToken:false, detectSessionInUrl:false, storageKey:'pw-verify' }
+  });
+  const { error } = await tmp.auth.signInWithPassword({ email: currentUser, password: pw });
+  return !error;
+}
+
+/* password confirmation dialog; resolves true only if the password is correct */
+function confirmWithPassword(title, message){
+  return new Promise(resolve=>{
+    const ov = document.getElementById('modalOverlay');
+    ov.innerHTML = `<div class="modalbox">
+      <h3>${escapeHtml(title)}</h3>
+      <div class="sub2" style="margin:0 0 12px;display:block">${escapeHtml(message)}</div>
+      <label>Your password<input id="pw_in" type="password" autocomplete="current-password"></label>
+      <div class="loginerr" id="pw_err"></div>
+      <div class="mactions"><button class="ghostbtn" id="pw_cancel">Cancel</button><button class="primary-btn" id="pw_ok">Confirm</button></div>
+    </div>`;
+    ov.style.display = 'flex';
+    const input = document.getElementById('pw_in'), err = document.getElementById('pw_err'), ok = document.getElementById('pw_ok');
+    const done = v=>{ closeModal(); resolve(v); };
+    ov.onclick = e=>{ if(e.target===ov) done(false); };
+    document.getElementById('pw_cancel').onclick = ()=>done(false);
+    const submit = async ()=>{
+      if(!input.value){ err.textContent = 'Enter your password.'; return; }
+      ok.disabled = true; ok.textContent = 'Checking…'; err.textContent = '';
+      let good = false;
+      try{ good = await verifyPassword(input.value); }catch(e){ console.error(e); }
+      if(good){ done(true); return; }
+      ok.disabled = false; ok.textContent = 'Confirm';
+      err.textContent = 'Wrong password. Try again.';
+      input.value = ''; input.focus();
+    };
+    ok.onclick = submit;
+    input.onkeydown = e=>{ if(e.key==='Enter') submit(); };
+    setTimeout(()=>input.focus(), 0);
+  });
+}
+
 async function renameBranch(b){
-  if(!isAdmin()){ alert('Only administrators can rename branches.'); return; }
+  if(!isAdmin()){ alert('Only an admin can rename a branch.'); return; }
   const name = prompt('Rename branch:', b.name);
   if(!name || !name.trim() || name.trim()===b.name) return;
-  const oldName = b.name;
-  const { error } = await sb.from('branches').update({ name:name.trim() }).eq('id', b.id);
+  const oldName = b.name, newName = name.trim();
+  const okPw = await confirmWithPassword('Confirm rename', `Enter your password to rename "${oldName}" to "${newName}".`);
+  if(!okPw) return;
+  const { error } = await sb.from('branches').update({ name:newName }).eq('id', b.id);
   if(error){ alert('Rename failed: '+error.message); return; }
-  // A database trigger enforces admin-only renames and writes the authoritative audit entry.
+  await logAudit('rename_branch', `Renamed branch "${oldName}" to "${newName}"`);
   refreshAudit(); loadAllData();
 }
 
@@ -667,7 +669,7 @@ async function archiveBranch(b){
   if(!confirm(`Archive "${b.name}"? It is hidden from the list but all its items are kept. You can restore it anytime.`)) return;
   const { error } = await sb.from('branches').update({ archived:true }).eq('id', b.id);
   if(error){ alert('Archive failed: '+error.message); return; }
-  await logAudit('archive_branch', `Archived branch "${b.name}" (${b.items.length} item rows kept)`, b.id);
+  await logAudit('archive_branch', `Archived branch "${b.name}" (${b.items.length} item rows kept)`);
   selected = null;
   refreshAudit(); loadAllData();
 }
@@ -676,7 +678,7 @@ async function restoreBranch(b){
   if(!isAdmin()) return;
   const { error } = await sb.from('branches').update({ archived:false }).eq('id', b.id);
   if(error){ alert('Restore failed: '+error.message); return; }
-  await logAudit('restore_branch', `Restored branch "${b.name}"`, b.id);
+  await logAudit('restore_branch', `Restored branch "${b.name}"`);
   showArchived = false; selected = b.id; view = 'branch'; setTabs();
   refreshAudit(); loadAllData();
 }
@@ -687,7 +689,7 @@ async function deleteBranch(b){
   if(!(await takeSnapshot('pre-delete', false))) return;
   const { error } = await sb.from('branches').delete().eq('id', b.id);
   if(error){ alert('Delete failed: '+error.message); return; }
-  await logAudit('delete_branch', `Permanently deleted archived branch "${b.name}" (${b.items.length} item rows)`, b.id);
+  await logAudit('delete_branch', `Permanently deleted archived branch "${b.name}" (${b.items.length} item rows)`);
   selected = null;
   refreshAudit(); loadAllData();
 }
@@ -698,7 +700,7 @@ async function addBranchPrompt(){
   const { data, error } = await sb.from('branches').insert({ name:name.trim() }).select().single();
   if(error){ alert('Add branch failed: '+error.message); return; }
   showArchived = false; selected = data.id; view = 'branch'; setTabs();
-  await logAudit('add_branch', `Added branch "${data.name}"`, data.id);
+  await logAudit('add_branch', `Added branch "${data.name}"`);
   refreshAudit(); loadAllData();
 }
 
@@ -708,11 +710,11 @@ async function addItem(b, name, qty){
     const newQty = Number(existing.qty)+qty;
     const { error } = await sb.from('items').update({ qty:newQty, updated_at:new Date().toISOString() }).eq('id', existing.id);
     if(error){ alert('Update failed: '+error.message); return; }
-    await logAudit('add_item', `Added ${qty} to existing "${existing.name}" in ${b.name} → now ${newQty}`, b.id);
+    await logAudit('add_item', `Added ${qty} to existing "${existing.name}" in ${b.name} → now ${newQty}`);
   } else {
     const { error } = await sb.from('items').insert({ branch_id:b.id, name, qty });
     if(error){ alert('Add item failed: '+error.message); return; }
-    await logAudit('add_item', `Added new item "${name}" (qty ${qty}) to ${b.name}`, b.id);
+    await logAudit('add_item', `Added new item "${name}" (qty ${qty}) to ${b.name}`);
   }
   refreshAudit(); loadAllData();
 }
@@ -761,7 +763,7 @@ function openItemModal(b, it){
       msg = `Edited "${it.name}" in ${b.name} — ${diffs.join('; ')}`;
     }
     if(res.error){ err.textContent = 'Save failed: '+res.error.message; return; }
-    await logAudit(isNew?'add_item':'edit_item', msg, b.id);
+    await logAudit(isNew?'add_item':'edit_item', msg);
     await Promise.all([refreshAudit(), loadAllData()]);
     closeModal();
   };
@@ -771,14 +773,14 @@ async function bumpItem(b, it, delta){
   const newQty = Math.max(0, Number(it.qty)+delta);
   const { error } = await sb.from('items').update({ qty:newQty, updated_at:new Date().toISOString() }).eq('id', it.id);
   if(error){ alert('Update failed: '+error.message); return; }
-  await logAudit(delta>0?'increment':'decrement', `${delta>0?'+1':'-1'} "${it.name}" in ${b.name} → now ${newQty}`, b.id);
+  await logAudit(delta>0?'increment':'decrement', `${delta>0?'+1':'-1'} "${it.name}" in ${b.name} → now ${newQty}`);
   refreshAudit(); loadAllData();
 }
 
 async function deleteItem(b, it){
   const { error } = await sb.from('items').delete().eq('id', it.id);
   if(error){ alert('Delete failed: '+error.message); return; }
-  await logAudit('delete_item', `Removed "${it.name}" (qty ${it.qty}${it.asset_tag?', tag '+it.asset_tag:''}) from ${b.name}`, b.id);
+  await logAudit('delete_item', `Removed "${it.name}" (qty ${it.qty}${it.asset_tag?', tag '+it.asset_tag:''}) from ${b.name}`);
   refreshAudit(); loadAllData();
 }
 
@@ -818,13 +820,7 @@ function openScanModal(){
   document.getElementById('scan_cancel').onclick = closeScanModal;
   if(typeof Html5Qrcode === 'undefined'){ document.getElementById('scan_err').textContent = 'Scanner library did not load — check your connection and try again.'; return; }
   scanner = new Html5Qrcode('qr-reader');
-  // continuous focus mode is honored on most Android/Chrome cameras; iOS Safari currently
-  // ignores it (no web API for focus control there), so it's a no-op on iPhone, not a bug
-  scanner.start(
-    { facingMode:'environment', advanced:[{ focusMode:'continuous' }] },
-    { fps:10, qrbox:220 },
-    onScanSuccess, ()=>{}
-  )
+  scanner.start({ facingMode:'environment' }, { fps:10, qrbox:220 }, onScanSuccess, ()=>{})
     .catch(err=>{ document.getElementById('scan_err').textContent = 'Could not open the camera: '+(err.message||err); });
 }
 function closeScanModal(){
@@ -877,6 +873,7 @@ function render(){
   if(view==='all') renderOverview();
   else if(view==='audit') renderAudit();
   else if(view==='backups') renderBackups();
+  else if(view==='onloan') renderOnLoan();
   else if(view==='reports') renderReports();
   else renderBranch();
 }
@@ -892,9 +889,9 @@ function renderBranchList(){
     const adminBtn = !isAdmin() ? '' : (b.archived
       ? '<button class="editbtn" data-a="restore" title="Restore branch"><i class="fa-solid fa-rotate-left"></i></button>'
       : '<button class="editbtn" data-a="archive" title="Archive branch"><i class="fa-solid fa-box-archive"></i></button>');
-    row.innerHTML = `<span class="bname">${escapeHtml(b.name)}</span><span class="rowbtns">${isAdmin() ? '<button class="editbtn" data-a="edit" title="Rename branch"><i class="fa-solid fa-pen"></i></button>' : ''}${adminBtn}<span class="cnt">${total}</span></span>`;
+    row.innerHTML = `<span class="bname">${escapeHtml(b.name)}</span><span class="rowbtns">${isAdmin() ? '<button class="editbtn" data-a="edit" title="Rename"><i class="fa-solid fa-pen"></i></button>' : ''}${adminBtn}<span class="cnt">${total}</span></span>`;
     row.onclick = ()=>{ selected=b.id; view='branch'; setTabs(); closeRail(); render(); };
-    const edit = row.querySelector('[data-a=edit]'); if(edit) edit.onclick = (e)=>{ e.stopPropagation(); renameBranch(b); };
+    const eb = row.querySelector('[data-a=edit]'); if(eb) eb.onclick = (e)=>{ e.stopPropagation(); renameBranch(b); };
     const ab = row.querySelector('[data-a=archive]'); if(ab) ab.onclick = (e)=>{ e.stopPropagation(); archiveBranch(b); };
     const rb = row.querySelector('[data-a=restore]'); if(rb) rb.onclick = (e)=>{ e.stopPropagation(); restoreBranch(b); };
     list.appendChild(row);
@@ -910,15 +907,9 @@ function setTabs(){
   document.getElementById('tabAll').classList.toggle('active', view==='all');
   document.getElementById('tabAudit').classList.toggle('active', view==='audit');
   document.getElementById('tabBackups').classList.toggle('active', view==='backups');
+  document.getElementById('tabOnLoan').classList.toggle('active', view==='onloan');
   document.getElementById('tabReports').classList.toggle('active', view==='reports');
   document.getElementById('branchBar').classList.toggle('off', view!=='branch');
-}
-
-function itemMatchesSearch(it, query){
-  const q = (query||'').trim().toLocaleLowerCase();
-  if(!q) return true;
-  return [it.name,it.serial_no,it.asset_tag,it.assigned_to,it.status]
-    .some(v => String(v||'').toLocaleLowerCase().includes(q));
 }
 
 function renderBranch(){
@@ -932,7 +923,6 @@ function renderBranch(){
   const adminBtns = !isAdmin() ? '' : (ro
     ? '<button class="ghostbtn" id="restoreBtn"><i class="fa-solid fa-rotate-left"></i> Restore</button><button class="ghostbtn dangerbtn" id="purgeBtn"><i class="fa-solid fa-trash"></i> Delete permanently</button>'
     : `<button class="ghostbtn" id="archiveBtn"><i class="fa-solid fa-box-archive"></i> Archive</button>${b.items.length ? '<button class="ghostbtn" id="printLabelsBtn"><i class="fa-solid fa-tags"></i> Print labels</button>' : ''}`);
-  const branchEvents = auditCache.filter(e=>e.branch_id===b.id);
   content.innerHTML = `
     <h2>${escapeHtml(b.name)} ${isAdmin() ? '<button class="editbtn" id="editBranchName" title="Rename branch"><i class="fa-solid fa-pen"></i></button>' : ''}${adminBtns}</h2>
     <div class="sub">ICT inventory for this branch</div>
@@ -942,51 +932,40 @@ function renderBranch(){
       <input name="iqty" type="number" min="1" value="1" placeholder="Qty">
       <button id="addItemBtn"><i class="fa-solid fa-plus"></i> Add item</button>
     </div>
-    <div style="margin:-8px 0 16px"><button class="ghostbtn" id="addDetailBtn" style="margin-left:0"><i class="fa-solid fa-plus"></i> Add asset with details (serial, tag, status…)</button></div>`}
-    ${b.items.length ? `<div class="item-search-wrap"><input id="branchItemSearch" class="item-search" type="search" autocomplete="off" placeholder="Search this branch by item name, serial number, asset tag, or assigned person…" value="${escapeHtml(window.branchItemSearchQuery||'')}"><div class="search-hint">Searches item name, serial number, asset tag, assigned person, and status.</div></div>` : ''}
-    <div id="branchSearchCount" class="search-count" aria-live="polite"></div>
+    <div style="margin:-8px 0 16px"><button class="ghostbtn" id="addDetailBtn" style="margin-left:0"><i class="fa-solid fa-plus"></i> Add asset with details (serial, tag, status…)</button><button class="ghostbtn" id="checkoutPickBtn"><i class="fa-solid fa-right-from-bracket"></i> Check out an asset</button></div>`}
     <table class="itemtable">
       <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th></th><th></th></tr></thead>
       <tbody id="itemsBody"></tbody>
     </table>
     ${b.items.length===0 ? '<div class="empty">No items logged yet.</div>' : ''}
     <div class="total">Total units in ${escapeHtml(b.name)}: <b>${total}</b></div>
-    <section class="rp-sec" style="margin-top:28px">
-      <h3><i class="fa-solid fa-clock-rotate-left"></i> Branch Audit Log</h3>
-      <div class="sub">Recent activity recorded for this branch.</div>
-      ${branchEvents.length ? `<table class="audittable"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody>${branchEvents.map(e=>`<tr><td class="ts">${escapeHtml(fmtTs(e.ts))}</td><td class="user">${escapeHtml(e.app_user)}</td><td class="action">${escapeHtml(e.action)}</td><td>${escapeHtml(e.details||'')}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No branch activity logged yet. New activity will appear here after the database migration is applied.</div>'}
-    </section>
   `;
-  const editBranch = document.getElementById('editBranchName');
-  if(editBranch) editBranch.onclick = ()=>renameBranch(b);
+  const ebn = document.getElementById('editBranchName'); if(ebn) ebn.onclick = ()=>renameBranch(b);
   const on = (id, fn)=>{ const el = document.getElementById(id); if(el) el.onclick = fn; };
   on('archiveBtn', ()=>archiveBranch(b)); on('restoreBtn', ()=>restoreBranch(b)); on('purgeBtn', ()=>deleteBranch(b));
   on('printLabelsBtn', ()=>printLabels(b));
   on('addDetailBtn', ()=>openItemModal(b, null));
+  on('checkoutPickBtn', ()=>openCheckoutPicker(b));
   const tbody = document.getElementById('itemsBody');
-  const drawBranchItems = (query='') => {
-    tbody.innerHTML = '';
-    const matches = b.items.filter(it=>itemMatchesSearch(it, query));
-    const count = document.getElementById('branchSearchCount');
-    if(count) count.textContent = query.trim() ? `${matches.length} matching item${matches.length===1?'':'s'}` : `${b.items.length} item record${b.items.length===1?'':'s'}`;
-    matches.forEach(it=>{
+  b.items.forEach(it=>{
     const meta = [it.serial_no && `S/N ${it.serial_no}`, it.asset_tag && `Tag ${it.asset_tag}`, it.assigned_to && `Assigned: ${it.assigned_to}`].filter(Boolean).join(' · ');
     const isAsset = !!(it.serial_no || it.asset_tag);
-    const ciBtn = ro ? '' : '<button class="ghostbtn" data-a="checkin" style="margin-left:0"><i class="fa-solid fa-clipboard-check"></i> Check in</button>';
+    const checkedOut = it.status === 'Checked out';
+    let coBtn = '';
+    if(!ro){
+      if(checkedOut) coBtn = '<button class="ghostbtn" data-a="checkin" style="margin-left:0"><i class="fa-solid fa-arrow-right-to-bracket"></i> Check in</button>';
+      else if(Number(it.qty) > 0) coBtn = '<button class="ghostbtn" data-a="checkout" style="margin-left:0"><i class="fa-solid fa-right-from-bracket"></i> Check out</button>';
+    }
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><span class="itemname">${escapeHtml(it.name)}</span>${ro?'':' <button class="editbtn" data-a="rename" title="Edit details"><i class="fa-solid fa-pen"></i></button>'}${it.status && it.status!=='In use' ? `<span class="${statusPillClass(it.status)}">${escapeHtml(it.status)}</span>` : ''}${meta ? `<div class="itemmeta">${escapeHtml(meta)}</div>` : ''}${ciBtn ? `<div style="margin-top:6px">${ciBtn}</div>` : ''}</td>
+    tr.innerHTML = `<td><span class="itemname">${escapeHtml(it.name)}</span>${ro?'':' <button class="editbtn" data-a="rename" title="Edit details"><i class="fa-solid fa-pen"></i></button>'}${it.status && it.status!=='In use' ? `<span class="${statusPillClass(it.status)}">${escapeHtml(it.status)}</span>` : ''}${meta ? `<div class="itemmeta">${escapeHtml(meta)}</div>` : ''}${coBtn ? `<div style="margin-top:6px">${coBtn}</div>` : ''}</td>
       <td class="qty">${it.qty}</td>
       <td class="actions">${ro?'':'<button class="qtybtn" data-a="dec"><i class="fa-solid fa-minus"></i></button> <button class="qtybtn" data-a="inc"><i class="fa-solid fa-plus"></i></button>'}</td>
       <td class="actions">${ro?'':'<button class="del" data-a="del"><i class="fa-solid fa-trash"></i> remove</button>'}</td>`;
     const h = (a, fn)=>{ const el = tr.querySelector(`[data-a=${a}]`); if(el) el.onclick = fn; };
     h('rename', ()=>openItemModal(b, it)); h('inc', ()=>bumpItem(b, it, 1)); h('dec', ()=>bumpItem(b, it, -1)); h('del', ()=>deleteItem(b, it));
-    h('checkin', ()=>openCheckinModal(b, it));
+    h('checkout', ()=>openCheckoutModal(b, it)); h('checkin', ()=>checkInItem(b, it));
     tbody.appendChild(tr);
-    });
-  };
-  drawBranchItems(window.branchItemSearchQuery||'');
-  const branchSearch = document.getElementById('branchItemSearch');
-  if(branchSearch) branchSearch.addEventListener('input', e=>{ window.branchItemSearchQuery=e.target.value; drawBranchItems(e.target.value); });
+  });
   if(!ro){
     document.getElementById('addItemBtn').onclick = ()=>{
       const nameEl = content.querySelector('input[name=iname]');
@@ -1015,34 +994,10 @@ function renderOverview(){
       <div class="statcard"><div class="statn">${names.length}</div><div class="statl">Item types</div></div>
       <div class="statcard statcard-accent"><div class="statn">${grand}</div><div class="statl">Total units</div></div>
     </div>
-    <section class="rp-sec" style="margin-top:20px">
-      <h3><i class="fa-solid fa-magnifying-glass"></i> Search inventory</h3>
-      <div class="item-search-wrap"><input id="allItemSearch" class="item-search" type="search" autocomplete="off" placeholder="Search item name, serial number, asset tag, or assigned person…" value="${escapeHtml(window.allItemSearchQuery||'')}"><div class="search-hint">Searches all active branches. Select a result to open its branch.</div></div>
-      <div id="allItemSearchResults" class="search-results" aria-live="polite"></div>
-    </section>
-    <section class="rp-sec"><h3>Item type totals</h3>
     ${names.length===0 ? '<div class="empty"><i class="fa-solid fa-inbox"></i> No items logged anywhere yet.</div>' :
       names.map(n=>`<div class="overview-row"><span>${escapeHtml(n)}</span><span class="n">${totals[n]}</span></div>`).join('')}
     ${names.length ? `<div class="total">Grand total units: <b>${grand}</b></div>` : ''}
-    </section>
   `;
-  const drawSearchResults = query => {
-    const target = document.getElementById('allItemSearchResults');
-    if(!target) return;
-    const q = (query||'').trim();
-    if(!q){ target.innerHTML = '<div class="empty">Enter a search term to find inventory across branches.</div>'; return; }
-    const results = active.flatMap(b=>b.items.filter(it=>itemMatchesSearch(it,q)).map(it=>({branch:b,item:it})))
-      .sort((a,b)=>a.branch.name.localeCompare(b.branch.name)||a.item.name.localeCompare(b.item.name));
-    if(!results.length){ target.innerHTML = '<div class="empty">No matching items found.</div>'; return; }
-    target.innerHTML = `<div class="search-count">${results.length} matching record${results.length===1?'':'s'}</div><table class="audittable"><thead><tr><th>Branch</th><th>Item</th><th>Qty</th><th>Serial number</th><th>Asset tag</th><th>Assigned to</th><th>Status</th></tr></thead><tbody>${results.map(({branch:b,item:it},idx)=>`<tr data-search-result="${idx}" title="Open ${escapeHtml(b.name)}"><td>${escapeHtml(b.name)}</td><td>${escapeHtml(it.name)}</td><td>${Number(it.qty||0)}</td><td>${escapeHtml(it.serial_no||'—')}</td><td>${escapeHtml(it.asset_tag||'—')}</td><td>${escapeHtml(it.assigned_to||'—')}</td><td>${escapeHtml(it.status||'In use')}</td></tr>`).join('')}</tbody></table>`;
-    target.querySelectorAll('[data-search-result]').forEach(row=>row.addEventListener('click',()=>{
-      const result=results[Number(row.dataset.searchResult)]; if(!result) return;
-      selected=result.branch.id; showArchived=false; view='branch'; setTabs(); render();
-    }));
-  };
-  const search = document.getElementById('allItemSearch');
-  drawSearchResults(window.allItemSearchQuery||'');
-  if(search) search.addEventListener('input',e=>{ window.allItemSearchQuery=e.target.value; drawSearchResults(e.target.value); });
 }
 
 function statusPillClass(status){
@@ -1084,39 +1039,149 @@ function renderAudit(){
   content.querySelectorAll('.chip').forEach(c=>{ c.onclick = ()=>{ auditUser = c.dataset.u; renderAudit(); }; });
 }
 
-/* ---------- Check-in (presence / count verification) ---------- */
+/* ---------- Check-out / Check-in (serialized assets) ---------- */
+function overdue(due){ return due && due < new Date().toISOString().slice(0,10); }
+
 function itemLabel(it){ return it.name + (it.asset_tag?' — Tag '+it.asset_tag:(it.serial_no?' — S/N '+it.serial_no:'')); }
 
-function checkinFormHtml(it){
-  return `<label>Counted quantity <span class="sub2">(currently ${it.qty} on record)</span><input id="ci_qty" type="number" min="0" value="${it.qty}"></label>
-    <label style="margin-top:10px">Note (optional)<textarea id="ci_note" rows="2" placeholder="Condition, location, etc."></textarea></label>
-    <div class="loginerr" id="ci_err"></div>
-    <div class="mactions"><button class="ghostbtn" id="ci_cancel">Cancel</button><button class="primary-btn" id="ci_save"><i class="fa-solid fa-clipboard-check"></i> Check in</button></div>`;
+async function submitCheckout(b, it, to, due, note, qtyRaw, err){
+  if(!to){ if(err) err.textContent = 'Enter who this is being checked out to.'; return false; }
+  const qty = Math.max(1, Number(qtyRaw)||1);
+  if(qty > Number(it.qty)){ if(err) err.textContent = `Only ${it.qty} on hand.`; return false; }
+  const newQty = Number(it.qty) - qty;
+  const patch = { qty:newQty, updated_at:new Date().toISOString() };
+  if(newQty === 0){ patch.status = 'Checked out'; patch.assigned_to = to; } // fully out: show it on the row
+  const { error: ue } = await sb.from('items').update(patch).eq('id', it.id);
+  if(ue){ if(err) err.textContent = 'Save failed: '+ue.message; return false; }
+  const { error: ce } = await sb.from('checkouts').insert({ item_id:it.id, branch_id:b.id, branch_name:b.name, item_name:it.name, serial_no:it.serial_no||null, asset_tag:it.asset_tag||null, checked_out_to:to, checked_out_by:currentUser, due_date:due, note, qty });
+  if(ce && err) err.textContent = 'Saved item, but the loan record failed: '+ce.message;
+  closeModal();
+  const label = (qty>1?qty+' x ':'') + it.name;
+  await logAudit('checkout', `Checked out ${label}${it.asset_tag?' (tag '+it.asset_tag+')':(it.serial_no?' (S/N '+it.serial_no+')':'')} from ${b.name} to ${to}${due?', due '+due:''}`);
+  refreshAudit(); loadAllData(); if(view==='onloan') refreshLoans();
+  return true;
 }
 
-function openCheckinModal(b, it){
+function checkoutFormHtml(b, qtyMax){
+  return `<label>Qty to check out <span class="sub2">(of ${qtyMax} on hand)</span><input id="co_qty" type="number" min="1" max="${qtyMax}" value="1"></label>
+    <label style="margin-top:10px">Checked out to<input id="co_to" placeholder="Name of person"></label>
+    <div class="grid2" style="margin-top:10px">
+      <label>Due back (optional)<input id="co_due" type="date"></label>
+      <label>Branch<input value="${escapeHtml(b.name)}" disabled></label>
+    </div>
+    <label>Note (optional)<textarea id="co_note" rows="2" placeholder="Purpose, condition, etc."></textarea></label>
+    <div class="loginerr" id="co_err"></div>
+    <div class="mactions"><button class="ghostbtn" id="co_cancel">Cancel</button><button class="primary-btn" id="co_save"><i class="fa-solid fa-right-from-bracket"></i> Check out</button></div>`;
+}
+
+function openCheckoutModal(b, it){
   const ov = document.getElementById('modalOverlay');
-  ov.innerHTML = `<div class="modalbox"><h3>Check in<span class="sub2">${escapeHtml(itemLabel(it))}</span></h3>${checkinFormHtml(it)}</div>`;
+  ov.innerHTML = `<div class="modalbox"><h3>Check out<span class="sub2">${escapeHtml(itemLabel(it))}</span></h3>${checkoutFormHtml(b, it.qty)}</div>`;
   ov.style.display = 'flex';
   ov.onclick = e=>{ if(e.target===ov) closeModal(); };
-  document.getElementById('ci_cancel').onclick = closeModal;
-  document.getElementById('ci_save').onclick = async ()=>{
-    const err = document.getElementById('ci_err');
-    const counted = Number(document.getElementById('ci_qty').value);
-    const note = document.getElementById('ci_note').value.trim();
-    if(!Number.isFinite(counted) || counted < 0){ err.textContent = 'Enter a valid quantity.'; return; }
-    const diff = counted - Number(it.qty);
-    if(diff !== 0){
-      const { error } = await sb.from('items').update({ qty:counted, updated_at:new Date().toISOString() }).eq('id', it.id);
-      if(error){ err.textContent = 'Save failed: '+error.message; return; }
-    }
-    const msg = diff===0
-      ? `Checked in "${it.name}" at ${b.name} — count confirmed (${counted})${note?': '+note:''}`
-      : `Checked in "${it.name}" at ${b.name} — count adjusted ${it.qty} → ${counted} (${diff>0?'+':''}${diff})${note?': '+note:''}`;
-    await logAudit('checkin', msg, b.id);
-    closeModal(); refreshAudit(); loadAllData();
+  document.getElementById('co_cancel').onclick = closeModal;
+  document.getElementById('co_save').onclick = ()=>{
+    const err = document.getElementById('co_err');
+    submitCheckout(b, it, document.getElementById('co_to').value.trim(), document.getElementById('co_due').value || null, document.getElementById('co_note').value.trim() || null, document.getElementById('co_qty').value, err);
   };
 }
+
+function openCheckoutPicker(b){
+  const eligible = b.items.filter(it => Number(it.qty) > 0);
+  if(!eligible.length){ alert('Nothing in this branch is currently available to check out.'); return; }
+  const ov = document.getElementById('modalOverlay');
+  const optHtml = eligible.map(it=>`<option value="${it.id}" data-max="${it.qty}">${escapeHtml(itemLabel(it))} (${it.qty} on hand)</option>`).join('');
+  ov.innerHTML = `<div class="modalbox">
+    <h3>Check out<span class="sub2">${escapeHtml(b.name)}</span></h3>
+    <label>Which item<select id="co_item">${optHtml}</select></label>
+    <div id="co_form" style="margin-top:10px"></div>
+  </div>`;
+  ov.style.display = 'flex';
+  ov.onclick = e=>{ if(e.target===ov) closeModal(); };
+  const sel = document.getElementById('co_item');
+  const wire = ()=>{
+    const it = eligible.find(x=>x.id===sel.value);
+    document.getElementById('co_form').innerHTML = checkoutFormHtml(b, it.qty);
+    document.getElementById('co_cancel').onclick = closeModal;
+    document.getElementById('co_save').onclick = ()=>{
+      const err = document.getElementById('co_err');
+      submitCheckout(b, it, document.getElementById('co_to').value.trim(), document.getElementById('co_due').value || null, document.getElementById('co_note').value.trim() || null, document.getElementById('co_qty').value, err);
+    };
+  };
+  sel.onchange = wire; wire();
+}
+
+async function checkInItem(b, it){
+  const { data: rows, error: fe } = await sb.from('checkouts').select('*').eq('item_id', it.id).is('returned_at', null).order('checked_out_at', { ascending:false }).limit(1);
+  if(fe){ alert('Could not look up the loan record: '+fe.message); return; }
+  if(!rows || !rows[0]){ alert('No open loan record found for this item.'); return; }
+  checkInRecordById(rows[0]);
+}
+
+async function checkInRecordById(r){
+  const label = (r.qty>1?r.qty+' x ':'') + r.item_name;
+  if(!confirm(`Check in ${label} from ${r.checked_out_to}?`)) return;
+  const { data: itRows } = await sb.from('items').select('id,qty,status').eq('id', r.item_id).limit(1);
+  if(itRows && itRows[0]){
+    const newQty = Number(itRows[0].qty) + Number(r.qty||1);
+    const patch = { qty:newQty, updated_at:new Date().toISOString() };
+    if(itRows[0].status === 'Checked out'){ patch.status = 'In use'; patch.assigned_to = null; } // was fully out, now something's back
+    await sb.from('items').update(patch).eq('id', r.item_id);
+  }
+  await sb.from('checkouts').update({ returned_at:new Date().toISOString(), returned_by:currentUser }).eq('id', r.id);
+  await logAudit('checkin', `Checked in ${label} to ${r.branch_name} (was out to ${r.checked_out_to})`);
+  refreshAudit(); loadAllData(); refreshLoans();
+}
+
+async function refreshLoans(){
+  let q = sb.from('checkouts').select('*').order('checked_out_at', { ascending:false }).limit(500);
+  if(!showReturned) q = q.is('returned_at', null);
+  const { data, error } = await q;
+  if(error){
+    loanList = [];
+    document.getElementById('content').innerHTML = `<h2>On Loan</h2><div class="archivedbanner">Could not load loan records: ${escapeHtml(error.message)}. Make sure the checkouts SQL script has been run.</div>`;
+    return;
+  }
+  loanList = data || [];
+  if(view==='onloan') renderOnLoan();
+}
+
+function renderOnLoan(){
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <h2>On Loan</h2>
+    <div class="sub">Serialized/tagged assets currently checked out, and their return history.</div>
+    <div class="chips"><button class="chip${showReturned?'':' on'}" id="loanActiveBtn">Active</button><button class="chip${showReturned?' on':''}" id="loanAllBtn">Include returned</button></div>
+    ${loanList.length===0 ? `<div class="empty">${showReturned?'No loan history yet.':'Nothing is currently checked out.'}</div>` : `
+    <table class="audittable">
+      <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th>Branch</th><th>To</th><th>By</th><th>Out</th><th>Due</th><th>Returned</th>${showReturned?'':'<th></th>'}</tr></thead>
+      <tbody>${loanList.map(r=>{
+        const od = !r.returned_at && overdue(r.due_date);
+        return `<tr>
+          <td>${escapeHtml(r.item_name)}${r.asset_tag?' <span class="itemmeta">'+escapeHtml(r.asset_tag)+'</span>':(r.serial_no?' <span class="itemmeta">S/N '+escapeHtml(r.serial_no)+'</span>':'')}</td>
+          <td class="qty">${r.qty||1}</td>
+          <td>${escapeHtml(r.branch_name)}</td>
+          <td>${escapeHtml(r.checked_out_to)}</td>
+          <td class="user">${escapeHtml(r.checked_out_by||'')}</td>
+          <td class="ts">${escapeHtml(fmtTs(r.checked_out_at))}</td>
+          <td class="ts" style="${od?'color:var(--danger);font-weight:600':''}">${r.due_date?escapeHtml(r.due_date)+(od?' (overdue)':''):'—'}</td>
+          <td class="ts">${r.returned_at?escapeHtml(fmtTs(r.returned_at)):'—'}</td>
+          ${showReturned?'':`<td style="text-align:right"><button class="ghostbtn" data-recid="${r.id}">Check in</button></td>`}
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`}
+  `;
+  document.getElementById('loanActiveBtn').onclick = ()=>{ if(showReturned){ showReturned=false; refreshLoans(); } };
+  document.getElementById('loanAllBtn').onclick = ()=>{ if(!showReturned){ showReturned=true; refreshLoans(); } };
+  content.querySelectorAll('[data-recid]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const r = loanList.find(x=>String(x.id)===btn.dataset.recid);
+      if(r) checkInRecordById(r);
+    };
+  });
+}
+
+document.getElementById('tabOnLoan').onclick = ()=>{ view='onloan'; setTabs(); renderBranchList(); refreshLoans(); };
 
 /* ---------- Excel export / import ---------- */
 function makeSheet(rows, header, widths){
@@ -1364,12 +1429,12 @@ async function deleteBackup(id){
 document.getElementById('tabBackups').onclick = ()=>{ view='backups'; setTabs(); renderBranchList(); refreshBackups(); };
 
 /* ---------- Reports ---------- */
-const RP_TYPES = [['summary','Inventory summary'],['status','Assets by status'],['assigned','Assigned to'],['activity','Activity'],['quality','Data quality']];
+const RP_TYPES = [['summary','Inventory summary'],['status','Assets by status'],['assigned','Assigned to'],['loans','Loans'],['activity','Activity'],['quality','Data quality']];
 const RP_CAP = 500;
-let rpType = 'summary', rpBranch = '', rpStatus = 'action';
+let rpType = 'summary', rpBranch = '', rpStatus = 'action', rpLoanMode = 'all';
 let rpFrom = '', rpTo = '', rpHideSess = true;
-let rpAudit = null, rpAuditKey = '', rpErr = '';
-const rpPending = { audit:null };
+let rpLoans = null, rpAudit = null, rpAuditKey = '', rpErr = '';
+const rpPending = { loans:false, audit:null };
 
 function localDay(v){
   const d = new Date(v); if(isNaN(d)) return '';
@@ -1459,6 +1524,37 @@ function rpAssigned(){
   };
 }
 
+function rpLoansReport(){
+  if(rpLoans===null) return { loading:true };
+  const out = r=>!r.returned_at;
+  const over = r=>out(r) && r.due_date && overdue(r.due_date);
+  const inRange = r=>{ const d = localDay(r.checked_out_at); return (!rpFrom||d>=rpFrom) && (!rpTo||d<=rpTo); };
+  const retInRange = r=>{ if(!r.returned_at) return false; const d = localDay(r.returned_at); return (!rpFrom||d>=rpFrom) && (!rpTo||d<=rpTo); };
+  const all = rpLoans.filter(r=>!rpBranch || String(r.branch_id)===rpBranch);
+  let list;
+  if(rpLoanMode==='active') list = all.filter(out);
+  else if(rpLoanMode==='overdue') list = all.filter(over);
+  else list = all.filter(inRange);
+  const header = ['Item','Serial / tag','Qty','Branch','Checked out to','Checked out by','Out','Due','Returned','Status'];
+  const rows = list.map(r=>[
+    r.item_name, r.asset_tag||r.serial_no||'', Number(r.qty||1), r.branch_name, r.checked_out_to, r.checked_out_by||'',
+    r.checked_out_at?fmtTs(r.checked_out_at):'', r.due_date||'', r.returned_at?fmtTs(r.returned_at):'',
+    r.returned_at ? 'Returned' : (over(r) ? 'Overdue' : 'Out')
+  ]);
+  const byItem = rpGroup(list, r=>r.item_name).map(g=>[g.label, g.list.length, g.list.reduce((s,r)=>s+Number(r.qty||1),0)]).sort((a,b)=>b[1]-a[1]);
+  const byPerson = rpGroup(list, r=>r.checked_out_to).map(g=>[g.label, g.list.length, g.list.filter(out).length]).sort((a,b)=>b[1]-a[1]);
+  const modeLabel = rpLoanMode==='active' ? 'currently out (any date)' : rpLoanMode==='overdue' ? 'overdue (any date)' : 'checked out between '+rpRangeLabel();
+  return {
+    title:'Loans', sub:'Scope: '+rpBranchLabel()+' · Showing: '+modeLabel,
+    cards:[{n:all.filter(out).length,l:'Currently out'},{n:all.filter(over).length,l:'Overdue'},{n:all.filter(inRange).length,l:'Checked out in range'},{n:all.filter(retInRange).length,l:'Returned in range'}],
+    sections:[
+      { title:'Loan records ('+rows.length+')', header, rows, empty:'No loans match these filters.' },
+      { title:'Most borrowed items', header:['Item','Times borrowed','Units'], rows:byItem, empty:'No loans match these filters.' },
+      { title:'By person', header:['Person','Loans','Still out'], rows:byPerson, empty:'No loans match these filters.' }
+    ]
+  };
+}
+
 function rpActivityReport(){
   if(rpAudit===null || rpAuditKey!==rpFrom+'|'+rpTo) return { loading:true };
   const rows = rpAudit.filter(e=>!(rpHideSess && (e.action==='login' || e.action==='logout')));
@@ -1512,43 +1608,10 @@ function rpQuality(){
 function buildReport(){
   if(rpType==='status') return rpStatusReport();
   if(rpType==='assigned') return rpAssigned();
+  if(rpType==='loans') return rpLoansReport();
   if(rpType==='activity') return rpActivityReport();
   if(rpType==='quality') return rpQuality();
   return rpSummary();
-}
-
-function rpGraphData(rep){
-  if(rpType==='summary'){
-    return {title:'Units by branch', note:'Total inventory quantity in each active branch.', rows:rpScope().map(b=>({label:b.name,value:rpUnits(b.items)})).sort((a,b)=>b.value-a.value).slice(0,10)};
-  }
-  if(rpType==='status'){
-    const secs=rep.sections||[];
-    return {title:'Items by status',note:'Number of item rows in the selected status report.',rows:secs.map(s=>({label:s.title.replace(/ \(\d+\)$/,''),value:(s.rows||[]).length})).slice(0,10)};
-  }
-  if(rpType==='assigned'){
-    const items=rpRows().filter(i=>(i.assigned_to||'').trim());
-    const groups=rpGroup(items,i=>i.assigned_to).map(g=>({label:g.label,value:rpUnits(g.list)})).sort((a,b)=>b.value-a.value).slice(0,10);
-    return {title:'Assigned units by person',note:'Top 10 people by quantity of assigned inventory.',rows:groups};
-  }
-  if(rpType==='activity'){
-    const sec=(rep.sections||[]).find(s=>s.title==='By action');
-    return {title:'Activity by action',note:'Count of recorded actions in the selected date range.',rows:(sec?.rows||[]).map(r=>({label:r[0]||'Unknown',value:Number(r[1]||0)})).slice(0,10)};
-  }
-  if(rpType==='quality'){
-    return {title:'Data quality checks',note:'Number of records flagged by each check. A record may appear in more than one check.',rows:(rep.cards||[]).map(c=>({label:c.l,value:Number(c.n||0)})).slice(0,10)};
-  }
-  return {title:'Report overview',note:'No graph available for this report.',rows:[]};
-}
-function rpGraph(rep){
-  if(rep.loading) return '';
-  const graph=rpGraphData(rep), rows=graph.rows||[];
-  if(!rows.length) return `<section class="rp-graph"><h3>Visual overview</h3><div class="rp-graph-sub">${escapeHtml(graph.note||'')}</div><div class="empty">No data available to visualize yet.</div></section>`;
-  const max=Math.max(1,...rows.map(r=>Number(r.value)||0));
-  const bars=rows.map(r=>{
-    const value=Math.max(0,Number(r.value)||0), width=value===0?0:Math.max(2,(value/max)*100);
-    return `<div class="rp-bar-row"><div class="rp-bar-label" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div><div class="rp-bar-track"><div class="rp-bar-fill" style="width:${width.toFixed(2)}%"></div></div><div class="rp-bar-value">${escapeHtml(value)}</div></div>`;
-  }).join('');
-  return `<section class="rp-graph"><h3>${escapeHtml(graph.title||'Visual overview')}</h3><div class="rp-graph-sub">${escapeHtml(graph.note||'')}</div><div class="rp-bars">${bars}</div></section>`;
 }
 
 /* ----- rendering ----- */
@@ -1577,7 +1640,10 @@ function rpControls(){
   if(rpType==='status'){
     h += `<label>Status<select id="rpStatusSel"><option value="action"${rpStatus==='action'?' selected':''}>Needs attention (repair, lost, retired, checked out)</option>${STATUSES.map(s=>`<option value="${escapeHtml(s)}"${rpStatus===s?' selected':''}>${escapeHtml(s)}</option>`).join('')}</select></label>`;
   }
-  if(rpType==='activity'){
+  if(rpType==='loans'){
+    h += `<label>Show<select id="rpModeSel"><option value="all"${rpLoanMode==='all'?' selected':''}>Checked out in date range</option><option value="active"${rpLoanMode==='active'?' selected':''}>Currently out (any date)</option><option value="overdue"${rpLoanMode==='overdue'?' selected':''}>Overdue (any date)</option></select></label>`;
+  }
+  if(rpType==='loans' || rpType==='activity'){
     h += `<label>From<input type="date" id="rpFromIn" value="${escapeHtml(rpFrom)}"></label><label>To<input type="date" id="rpToIn" value="${escapeHtml(rpTo)}"></label>`;
   }
   if(rpType==='activity'){
@@ -1589,7 +1655,7 @@ function rpControls(){
 function renderReports(){
   const content = document.getElementById('content');
   const rep = buildReport();
-  const needsFetch = rpType==='activity';
+  const needsFetch = rpType==='loans' || rpType==='activity';
   let body;
   if(rpErr) body = `<div class="archivedbanner">${escapeHtml(rpErr)}</div>`;
   else body = '';
@@ -1598,7 +1664,6 @@ function renderReports(){
   } else {
     body += `<div class="sub">${escapeHtml(rep.sub||'')}</div>`;
     body += `<div class="rp-cards">${rep.cards.map(c=>`<div class="statcard${c.accent?' statcard-accent':''}"><div class="statn">${escapeHtml(c.n)}</div><div class="statl">${escapeHtml(c.l)}</div></div>`).join('')}</div>`;
-    body += rpGraph(rep);
     body += rep.sections.map(sec=>rpTable(sec, 'audittable', RP_CAP)).join('');
   }
   content.innerHTML = `
@@ -1617,6 +1682,7 @@ function renderReports(){
   content.querySelectorAll('#rpTypes .chip').forEach(c=>{ c.onclick = ()=>{ rpType = c.dataset.r; rpErr = ''; renderReports(); rpLoad(); }; });
   if($('rpBranchSel')) $('rpBranchSel').onchange = e=>{ rpBranch = e.target.value; renderReports(); };
   if($('rpStatusSel')) $('rpStatusSel').onchange = e=>{ rpStatus = e.target.value; renderReports(); };
+  if($('rpModeSel')) $('rpModeSel').onchange = e=>{ rpLoanMode = e.target.value; renderReports(); };
   if($('rpFromIn')) $('rpFromIn').onchange = e=>{ rpFrom = e.target.value; renderReports(); rpLoad(); };
   if($('rpToIn')) $('rpToIn').onchange = e=>{ rpTo = e.target.value; renderReports(); rpLoad(); };
   if($('rpSessChk')) $('rpSessChk').onchange = e=>{ rpHideSess = e.target.checked; renderReports(); };
@@ -1625,7 +1691,7 @@ function renderReports(){
   $('rpPrint').onclick = printReport;
 }
 
-/* ----- data loading for activity ----- */
+/* ----- data loading for loans / activity ----- */
 async function rpPaged(make){
   let all = [], from = 0; const size = 1000;
   while(true){
@@ -1640,7 +1706,18 @@ async function rpPaged(make){
 }
 
 async function rpLoad(force){
-  if(rpType==='activity'){
+  if(rpType==='loans'){
+    if(!force && rpLoans!==null) return;
+    if(rpPending.loans) return;
+    rpPending.loans = true; if(force) rpLoans = null;
+    try{
+      rpLoans = await rpPaged(()=>sb.from('checkouts').select('*').order('checked_out_at', { ascending:false }).order('id'));
+    }catch(e){
+      console.error('loan report failed', e);
+      rpErr = 'Could not load loan records: ' + (e.message || e) + '. Make sure the checkouts SQL script has been run.';
+      rpLoans = [];
+    }finally{ rpPending.loans = false; }
+  } else if(rpType==='activity'){
     const key = rpFrom+'|'+rpTo;
     if(!force && rpAudit!==null && rpAuditKey===key) return;
     if(rpPending.audit===key) return;
@@ -1768,6 +1845,7 @@ if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
 }
 
 /* ---------- boot ---------- */
+let loanList = []; let showReturned = false;
 let subscribed = false;
 async function boot(){
   render();
