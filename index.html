@@ -408,6 +408,48 @@ header h1 i{color:var(--accent);margin-right:2px;}
   .rp-ptable tr{break-inside:avoid;}
   .rp-ptable thead{display:table-header-group;}
 }
+
+/* ===== toast, history, deleted, mobile polish ===== */
+#toast{position:fixed;left:50%;bottom:20px;transform:translate(-50%,20px);opacity:0;pointer-events:none;z-index:120;max-width:min(92vw,460px);display:flex;align-items:center;gap:14px;background:#2a2150;color:#fff;border:1px solid var(--accent-dim);padding:11px 14px;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.4);font-size:13.5px;transition:opacity .2s ease, transform .2s ease;}
+#toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto;}
+#toast .tmsg{flex:1;min-width:0;}
+#toast .tact{background:none;border:none;color:#c4b0ff;font-weight:700;font-size:13.5px;cursor:pointer;padding:8px 6px;font-family:inherit;text-transform:uppercase;letter-spacing:.04em;}
+.itemsearch{position:relative;margin:0 0 12px;}
+.itemsearch i{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-dim);font-size:13px;pointer-events:none;}
+.itemsearch input{width:100%;padding:10px 12px 10px 34px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:8px;font-family:inherit;font-size:14px;}
+.tl{list-style:none;margin:12px 0 0;padding:0 2px 0 0;max-height:52vh;overflow-y:auto;}
+.tl li{display:flex;gap:12px;padding:0 0 14px;position:relative;}
+.tl li:not(:last-child)::before{content:'';position:absolute;left:13px;top:30px;bottom:0;width:2px;background:var(--border);}
+.tl .dot{flex:0 0 28px;height:28px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--accent);}
+.tl .tx{font-size:13.5px;line-height:1.4;word-break:break-word;}
+.tl .mt{font-size:11.5px;color:var(--text-dim);margin-top:2px;}
+.trashrow{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px 14px;margin-bottom:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;}
+.trashrow .tinfo{min-width:0;}
+.trashrow .tname{font-weight:600;font-size:15px;word-break:break-word;}
+.trashrow .tq{font-family:'IBM Plex Mono',monospace;color:var(--accent);font-size:13px;}
+.trashrow .tmeta{font-size:12px;color:var(--text-dim);margin-top:2px;word-break:break-word;}
+.trashrow .ghostbtn{margin:0;flex:0 0 auto;}
+#bottomNav{display:none;}
+@media (max-width:768px){
+  #bottomNav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:60;background:var(--surface);border-top:1px solid var(--border);box-shadow:0 -4px 18px rgba(0,0,0,.18);padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px));gap:2px;}
+  #bottomNav button{flex:1;background:none;border:none;color:var(--text-dim);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10.5px;font-family:inherit;min-height:52px;padding:4px 2px;border-radius:12px;cursor:pointer;}
+  #bottomNav button i{font-size:19px;}
+  #bottomNav button.active{color:var(--accent);background:var(--surface-2);}
+  #bottomNav button.scan i{background:var(--accent);color:#fff;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;margin-top:-18px;box-shadow:0 4px 12px rgba(124,58,237,.45);}
+  #bottomNav button.scan{background:none;}
+  .content{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px)) !important;}
+  #toast{bottom:calc(84px + env(safe-area-inset-bottom,0px));}
+  .itemsearch input{font-size:16px;min-height:44px;}
+  .itemtable tr{background:var(--surface-2);border:1px solid var(--border) !important;border-radius:12px;padding:13px 12px !important;margin-bottom:10px;}
+  .itemtable td.qty{font-size:22px;}
+  .itemtable td .editbtn{padding:8px 10px;font-size:16px;}
+  .itemname{font-weight:600;}
+  .tl{max-height:58vh;}
+  .trashrow{flex-wrap:wrap;}
+  .trashrow .ghostbtn{width:100%;min-height:44px;}
+  .rp-actions .ghostbtn{flex:1 1 auto;}
+}
+@media (max-width:900px) and (max-height:420px) and (orientation:landscape){ #bottomNav{display:none;} .content{padding-bottom:20px !important;} #toast{bottom:16px;} }
 </style>
 </head>
 <body>
@@ -440,6 +482,7 @@ header h1 i{color:var(--accent);margin-right:2px;}
       <div class="tab" id="tabAll">All Items</div>
       <div class="tab" id="tabAudit">Audit Log</div>
       <div class="tab" id="tabBackups">Backups</div>
+      <div class="tab" id="tabTrash">Deleted</div>
       <div class="tab" id="tabOnLoan">On Loan</div>
       <div class="tab" id="tabReports">Reports</div>
     </div>
@@ -469,6 +512,14 @@ header h1 i{color:var(--accent);margin-right:2px;}
   <div class="content" id="content"></div>
 </main>
 
+<nav id="bottomNav" aria-label="Main">
+  <button data-go="tabBranch"><i class="fa-solid fa-location-dot"></i><span>Branches</span></button>
+  <button data-go="tabAll"><i class="fa-solid fa-boxes-stacked"></i><span>All items</span></button>
+  <button class="scan" data-go="scanBtn"><i class="fa-solid fa-qrcode"></i><span>Scan</span></button>
+  <button data-go="tabOnLoan"><i class="fa-solid fa-hand-holding"></i><span>On loan</span></button>
+  <button data-go="tabReports"><i class="fa-solid fa-chart-column"></i><span>Reports</span></button>
+</nav>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -496,7 +547,7 @@ function applySession(user){
   currentRole = (user.app_metadata && user.app_metadata.role) || 'staff';
   document.getElementById('userLabel').textContent = currentUser + (isAdmin() ? ' (admin)' : '');
   document.getElementById('tabAudit').style.display = '';
-  ['importBtn','templateBtn','toggleArchived','tabBackups'].forEach(id=>{ document.getElementById(id).style.display = isAdmin() ? '' : 'none'; });
+  ['importBtn','templateBtn','toggleArchived','tabBackups','tabTrash'].forEach(id=>{ document.getElementById(id).style.display = isAdmin() ? '' : 'none'; });
 }
 
 async function attemptLogin(){
@@ -533,6 +584,7 @@ let selected = null;
 let view = 'branch';
 let showArchived = false;
 let auditUser = '';
+let itemFilter = '', filterBranch = null;
 
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function fmtTs(iso){ try{ return new Date(iso).toLocaleString(); }catch(e){ return iso; } }
@@ -710,11 +762,11 @@ async function addItem(b, name, qty){
     const newQty = Number(existing.qty)+qty;
     const { error } = await sb.from('items').update({ qty:newQty, updated_at:new Date().toISOString() }).eq('id', existing.id);
     if(error){ alert('Update failed: '+error.message); return; }
-    await logAudit('add_item', `Added ${qty} to existing "${existing.name}" in ${b.name} → now ${newQty}`);
+    await logAudit('add_item', `Added ${qty} to existing "${existing.name}" in ${b.name} → now ${newQty}${itemTag(existing.id)}`);
   } else {
-    const { error } = await sb.from('items').insert({ branch_id:b.id, name, qty });
+    const { data: ins, error } = await sb.from('items').insert({ branch_id:b.id, name, qty }).select('id').single();
     if(error){ alert('Add item failed: '+error.message); return; }
-    await logAudit('add_item', `Added new item "${name}" (qty ${qty}) to ${b.name}`);
+    await logAudit('add_item', `Added new item "${name}" (qty ${qty}) to ${b.name}${ins ? itemTag(ins.id) : ''}`);
   }
   refreshAudit(); loadAllData();
 }
@@ -754,7 +806,7 @@ function openItemModal(b, it){
     const row = { name, qty, serial_no:nv.serial_no||null, asset_tag:nv.asset_tag||null, status:nv.status, assigned_to:nv.assigned_to||null, purchase_date:nv.purchase_date||null, notes:nv.notes||null, updated_at:new Date().toISOString() };
     let res, msg;
     if(isNew){
-      res = await sb.from('items').insert(Object.assign({ branch_id:b.id }, row));
+      res = await sb.from('items').insert(Object.assign({ branch_id:b.id }, row)).select('id').single();
       msg = `Added "${name}" (qty ${qty}${nv.asset_tag?', tag '+nv.asset_tag:''}${nv.serial_no?', S/N '+nv.serial_no:''}) to ${b.name}`;
     } else {
       const diffs = ITEM_FIELDS.filter(([k])=>String(it[k]==null?'':it[k])!==String(nv[k]==null?'':nv[k])).map(([k,l])=>`${l}: ${it[k]||'—'} → ${nv[k]||'—'}`);
@@ -763,6 +815,7 @@ function openItemModal(b, it){
       msg = `Edited "${it.name}" in ${b.name} — ${diffs.join('; ')}`;
     }
     if(res.error){ err.textContent = 'Save failed: '+res.error.message; return; }
+    msg += isNew ? (res.data ? itemTag(res.data.id) : '') : itemTag(it.id);
     await logAudit(isNew?'add_item':'edit_item', msg);
     await Promise.all([refreshAudit(), loadAllData()]);
     closeModal();
@@ -773,15 +826,155 @@ async function bumpItem(b, it, delta){
   const newQty = Math.max(0, Number(it.qty)+delta);
   const { error } = await sb.from('items').update({ qty:newQty, updated_at:new Date().toISOString() }).eq('id', it.id);
   if(error){ alert('Update failed: '+error.message); return; }
-  await logAudit(delta>0?'increment':'decrement', `${delta>0?'+1':'-1'} "${it.name}" in ${b.name} → now ${newQty}`);
+  await logAudit(delta>0?'increment':'decrement', `${delta>0?'+1':'-1'} "${it.name}" in ${b.name} → now ${newQty}${itemTag(it.id)}`);
   refreshAudit(); loadAllData();
 }
 
 async function deleteItem(b, it){
+  const snap = { id:it.id, branch_id:b.id, name:it.name, qty:it.qty, serial_no:it.serial_no||null, asset_tag:it.asset_tag||null,
+    status:it.status||'In use', assigned_to:it.assigned_to||null, purchase_date:it.purchase_date||null, notes:it.notes||null, updated_at:it.updated_at||null };
+  const { data: tr, error: te } = await sb.from('deleted_items')
+    .insert({ item_id:String(it.id), item_name:it.name, branch_id:String(b.id), branch_name:b.name, item:snap, deleted_by:currentUser })
+    .select('id').single();
+  if(te){
+    console.error('could not save undo copy', te);
+    if(!confirm(`Could not save an undo copy (${te.message}).\n\nDelete "${it.name}" anyway? It cannot be restored.`)) return;
+  }
   const { error } = await sb.from('items').delete().eq('id', it.id);
-  if(error){ alert('Delete failed: '+error.message); return; }
-  await logAudit('delete_item', `Removed "${it.name}" (qty ${it.qty}${it.asset_tag?', tag '+it.asset_tag:''}) from ${b.name}`);
+  if(error){
+    alert('Delete failed: '+error.message);
+    if(tr) await sb.from('deleted_items').update({ restored_at:new Date().toISOString(), restored_by:'(delete failed)' }).eq('id', tr.id);
+    return;
+  }
+  await logAudit('delete_item', `Removed "${it.name}" (qty ${it.qty}${it.asset_tag?', tag '+it.asset_tag:''}) from ${b.name}${itemTag(it.id)}`);
   refreshAudit(); loadAllData();
+  if(tr) showToast(`Removed "${it.name}"`, { action:'Undo', ms:8000, onAction:()=>restoreDeleted(tr.id) });
+}
+
+/* ---------- toast, item history, recently deleted ---------- */
+const itemTag = id => ' [#'+id+']';
+const cleanDetails = d => String(d==null?'':d).replace(/\s*\[#\d+\]\s*$/,'');
+
+let toastTimer = null;
+function showToast(msg, opts){
+  opts = opts || {};
+  let el = document.getElementById('toast');
+  if(!el){ el = document.createElement('div'); el.id = 'toast'; document.body.appendChild(el); }
+  clearTimeout(toastTimer);
+  el.innerHTML = '<span class="tmsg"></span>' + (opts.action ? '<button class="tact"></button>' : '');
+  el.querySelector('.tmsg').textContent = msg;
+  if(opts.action){
+    const bt = el.querySelector('.tact'); bt.textContent = opts.action;
+    bt.onclick = ()=>{ el.classList.remove('show'); clearTimeout(toastTimer); if(opts.onAction) opts.onAction(); };
+  }
+  el.classList.add('show');
+  toastTimer = setTimeout(()=>el.classList.remove('show'), opts.ms || 5000);
+}
+
+/* ----- item history ----- */
+const HIST_ICONS = { add_item:'fa-plus', edit_item:'fa-pen', increment:'fa-arrow-up', decrement:'fa-arrow-down', checkout:'fa-right-from-bracket', checkin:'fa-arrow-right-to-bracket', delete_item:'fa-trash', restore_item:'fa-rotate-left' };
+
+async function openHistory(b, it){
+  const ov = document.getElementById('modalOverlay');
+  const meta = [it.serial_no && `S/N ${it.serial_no}`, it.asset_tag && `Tag ${it.asset_tag}`, it.assigned_to && `Assigned: ${it.assigned_to}`].filter(Boolean).join(' · ');
+  const head = `<h3>History<span class="sub2">${escapeHtml(it.name)} · ${escapeHtml(b.name)}</span></h3>
+    <div class="sub2" style="margin:-6px 0 4px;display:block">Now: qty ${escapeHtml(it.qty)} · ${escapeHtml(it.status||'In use')}${meta?' · '+escapeHtml(meta):''}</div>`;
+  ov.innerHTML = `<div class="modalbox">${head}<div class="empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading history…</div><div class="mactions"><button class="ghostbtn" id="h_close">Close</button></div></div>`;
+  ov.style.display = 'flex';
+  ov.onclick = e=>{ if(e.target===ov) closeModal(); };
+  document.getElementById('h_close').onclick = closeModal;
+  const esc = it.name.replace(/[\\%_]/g, m=>'\\'+m);
+  const [a1, a2, co] = await Promise.all([
+    sb.from('audit_log').select('*').ilike('details', `%[#${it.id}]%`).order('ts', { ascending:false }).limit(300),
+    sb.from('audit_log').select('*').ilike('details', `%"${esc}"%`).order('ts', { ascending:false }).limit(300),
+    sb.from('checkouts').select('*').eq('item_id', it.id).order('checked_out_at', { ascending:false }).limit(200)
+  ]);
+  const ev = [], seen = new Set(); let legacy = false;
+  const key = e=> e.id!=null ? 'i'+e.id : e.ts+'|'+e.details;
+  (a1.data||[]).forEach(e=>{
+    seen.add(key(e));
+    if(e.action==='checkout' || e.action==='checkin') return;   // shown from the loans table instead
+    ev.push({ ts:e.ts, user:e.app_user, kind:e.action, text:cleanDetails(e.details) });
+  });
+  (a2.data||[]).forEach(e=>{
+    if(seen.has(key(e))) return;
+    const d = e.details || '';
+    if(/\[#\d+\]\s*$/.test(d)) return;                          // belongs to a different item
+    if(['checkout','checkin','export','import','login','logout'].includes(e.action)) return;
+    if(!d.includes(b.name)) return;
+    legacy = true;
+    ev.push({ ts:e.ts, user:e.app_user, kind:e.action, text:cleanDetails(d), old:true });
+  });
+  (co.data||[]).forEach(r=>{
+    ev.push({ ts:r.checked_out_at, user:r.checked_out_by, kind:'checkout',
+      text:`Checked out${Number(r.qty)>1?' ×'+r.qty:''} to ${r.checked_out_to}${r.due_date?', due '+r.due_date:''}${r.note?' — '+r.note:''}` });
+    if(r.returned_at) ev.push({ ts:r.returned_at, user:r.returned_by, kind:'checkin', text:`Returned by ${r.checked_out_to}` });
+  });
+  ev.sort((x,y)=> String(y.ts).localeCompare(String(x.ts)));
+  const list = ev.length
+    ? `<ul class="tl">${ev.map(e=>`<li><span class="dot"><i class="fa-solid ${HIST_ICONS[e.kind]||'fa-circle'}"></i></span><div><div class="tx">${escapeHtml(e.text)}</div><div class="mt">${escapeHtml(e.user||'unknown')} · ${escapeHtml(fmtTs(e.ts))}${e.old?' · matched by name':''}</div></div></li>`).join('')}</ul>`
+    : '<div class="empty">No recorded history for this item yet.</div>';
+  const note = legacy ? '<div class="sub2" style="display:block;margin:8px 0 0">Entries marked "matched by name" were logged before item history existed, so they may include another item with the same name in this branch.</div>' : '';
+  ov.innerHTML = `<div class="modalbox">${head}${list}${note}<div class="mactions"><button class="ghostbtn" id="h_close">Close</button></div></div>`;
+  document.getElementById('h_close').onclick = closeModal;
+}
+
+/* ----- recently deleted (undo) ----- */
+let trashRows = null, trashErr = '';
+
+async function restoreDeleted(trashId){
+  const { data: row, error: re } = await sb.from('deleted_items').select('*').eq('id', trashId).maybeSingle();
+  if(re || !row){ alert('Could not find the deleted item: '+(re ? re.message : 'not found')); return false; }
+  if(row.restored_at){ alert('This item was already restored.'); return false; }
+  const snap = Object.assign({}, row.item, { updated_at:new Date().toISOString() });
+  const br = state.branches.find(x=>String(x.id)===String(snap.branch_id));
+  if(!br){ alert('The branch this item belonged to no longer exists, so it cannot be restored.'); return false; }
+  let ins = await sb.from('items').insert(snap).select('id').single();
+  let newId = false;
+  if(ins.error){
+    const copy = Object.assign({}, snap); delete copy.id;
+    ins = await sb.from('items').insert(copy).select('id').single();
+    newId = true;
+  }
+  if(ins.error){ alert('Restore failed: '+ins.error.message); return false; }
+  await sb.from('deleted_items').update({ restored_at:new Date().toISOString(), restored_by:currentUser }).eq('id', trashId);
+  await logAudit('restore_item', `Restored "${snap.name}" (qty ${snap.qty}) to ${br.name}${newId?' with a new ID':''}${itemTag(ins.data.id)}`);
+  refreshAudit(); loadAllData();
+  if(view==='trash') refreshTrash();
+  showToast(`Restored "${snap.name}"` + (newId ? ' (new ID: reprint its QR label)' : ''), { ms:6000 });
+  return true;
+}
+
+async function refreshTrash(){
+  const { data, error } = await sb.from('deleted_items').select('*').is('restored_at', null).order('deleted_at', { ascending:false }).limit(200);
+  trashErr = error ? error.message : '';
+  trashRows = error ? [] : (data || []);
+  if(view==='trash') renderTrash();
+}
+
+function renderTrash(){
+  const content = document.getElementById('content');
+  let body;
+  if(trashRows===null) body = '<div class="empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
+  else if(trashErr) body = `<div class="archivedbanner">Could not load deleted items: ${escapeHtml(trashErr)}. Make sure the deleted_items SQL script has been run.</div>`;
+  else if(!trashRows.length) body = '<div class="empty">Nothing deleted recently.</div>';
+  else body = trashRows.map(r=>{
+    const s = r.item || {};
+    const meta = [s.serial_no && `S/N ${s.serial_no}`, s.asset_tag && `Tag ${s.asset_tag}`, s.assigned_to && `Assigned: ${s.assigned_to}`].filter(Boolean).join(' · ');
+    return `<div class="trashrow"><div class="tinfo"><div class="tname">${escapeHtml(r.item_name)} <span class="tq">×${escapeHtml(s.qty)}</span></div>
+      <div class="tmeta">${escapeHtml(r.branch_name||'')}${meta?' · '+escapeHtml(meta):''}</div>
+      <div class="tmeta">Deleted by ${escapeHtml(r.deleted_by||'unknown')} · ${escapeHtml(fmtTs(r.deleted_at))}</div></div>
+      <button class="ghostbtn" data-rid="${escapeHtml(r.id)}"><i class="fa-solid fa-rotate-left"></i> Restore</button></div>`;
+  }).join('');
+  content.innerHTML = `<h2><i class="fa-solid fa-trash-can-arrow-up"></i> Recently deleted</h2>
+    <div class="sub">Items removed from any branch are kept here for 90 days so they can be restored. Only items deleted since this feature was added are listed.</div>${body}`;
+  content.querySelectorAll('[data-rid]').forEach(bt=>{
+    bt.onclick = async ()=>{ bt.disabled = true; await restoreDeleted(Number(bt.dataset.rid)); bt.disabled = false; };
+  });
+}
+
+async function purgeOldTrash(){
+  try{ await sb.from('deleted_items').delete().lt('deleted_at', new Date(Date.now()-90*24*60*60*1000).toISOString()); }catch(e){}
 }
 
 /* ---------- QR labels: print + scan ---------- */
@@ -875,6 +1068,7 @@ function render(){
   else if(view==='backups') renderBackups();
   else if(view==='onloan') renderOnLoan();
   else if(view==='reports') renderReports();
+  else if(view==='trash') renderTrash();
   else renderBranch();
 }
 
@@ -909,6 +1103,9 @@ function setTabs(){
   document.getElementById('tabBackups').classList.toggle('active', view==='backups');
   document.getElementById('tabOnLoan').classList.toggle('active', view==='onloan');
   document.getElementById('tabReports').classList.toggle('active', view==='reports');
+  document.getElementById('tabTrash').classList.toggle('active', view==='trash');
+  const navMap = { branch:'tabBranch', all:'tabAll', onloan:'tabOnLoan', reports:'tabReports' };
+  document.querySelectorAll('#bottomNav button').forEach(bt=>bt.classList.toggle('active', bt.dataset.go===navMap[view]));
   document.getElementById('branchBar').classList.toggle('off', view!=='branch');
 }
 
@@ -918,6 +1115,7 @@ function renderBranch(){
   const b = state.branches.find(x=>x.id===selected) || visible[0];
   if(!b){ content.innerHTML = `<div class="empty">${showArchived ? 'No archived branches.' : 'No branches yet.'}</div>`; return; }
   selected = b.id;
+  if(filterBranch!==b.id){ itemFilter = ''; filterBranch = b.id; }
   const ro = !!b.archived;
   const total = b.items.reduce((s,it)=>s+Number(it.qty||0),0);
   const adminBtns = !isAdmin() ? '' : (ro
@@ -929,15 +1127,17 @@ function renderBranch(){
     ${ro ? '<div class="archivedbanner">This branch is archived (read-only). Restore it to make changes.</div>' : `
     <div class="addrow">
       <input name="iname" placeholder="Item name (e.g. Laptop)">
-      <input name="iqty" type="number" min="1" value="1" placeholder="Qty">
+      <input name="iqty" type="number" min="1" value="1" placeholder="Qty" inputmode="numeric">
       <button id="addItemBtn"><i class="fa-solid fa-plus"></i> Add item</button>
     </div>
     <div style="margin:-8px 0 16px"><button class="ghostbtn" id="addDetailBtn" style="margin-left:0"><i class="fa-solid fa-plus"></i> Add asset with details (serial, tag, status…)</button><button class="ghostbtn" id="checkoutPickBtn"><i class="fa-solid fa-right-from-bracket"></i> Check out an asset</button></div>`}
+    ${b.items.length ? `<div class="itemsearch"><i class="fa-solid fa-magnifying-glass"></i><input id="itemFilter" type="search" placeholder="Search this branch: name, serial, tag, person…" value="${escapeHtml(itemFilter)}" autocomplete="off"></div>` : ''}
     <table class="itemtable">
       <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th></th><th></th></tr></thead>
       <tbody id="itemsBody"></tbody>
     </table>
     ${b.items.length===0 ? '<div class="empty">No items logged yet.</div>' : ''}
+    <div class="empty" id="noMatch" style="display:none">No items match your search.</div>
     <div class="total">Total units in ${escapeHtml(b.name)}: <b>${total}</b></div>
   `;
   const ebn = document.getElementById('editBranchName'); if(ebn) ebn.onclick = ()=>renameBranch(b);
@@ -947,7 +1147,12 @@ function renderBranch(){
   on('addDetailBtn', ()=>openItemModal(b, null));
   on('checkoutPickBtn', ()=>openCheckoutPicker(b));
   const tbody = document.getElementById('itemsBody');
-  b.items.forEach(it=>{
+  const drawRows = ()=>{
+  tbody.innerHTML = '';
+  const fq = itemFilter.trim().toLowerCase();
+  const rows = fq ? b.items.filter(it=>[it.name,it.serial_no,it.asset_tag,it.assigned_to,it.status].some(v=>String(v||'').toLowerCase().includes(fq))) : b.items;
+  const nm = document.getElementById('noMatch'); if(nm) nm.style.display = (fq && rows.length===0) ? '' : 'none';
+  rows.forEach(it=>{
     const meta = [it.serial_no && `S/N ${it.serial_no}`, it.asset_tag && `Tag ${it.asset_tag}`, it.assigned_to && `Assigned: ${it.assigned_to}`].filter(Boolean).join(' · ');
     const isAsset = !!(it.serial_no || it.asset_tag);
     const checkedOut = it.status === 'Checked out';
@@ -957,15 +1162,18 @@ function renderBranch(){
       else if(Number(it.qty) > 0) coBtn = '<button class="ghostbtn" data-a="checkout" style="margin-left:0"><i class="fa-solid fa-right-from-bracket"></i> Check out</button>';
     }
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><span class="itemname">${escapeHtml(it.name)}</span>${ro?'':' <button class="editbtn" data-a="rename" title="Edit details"><i class="fa-solid fa-pen"></i></button>'}${it.status && it.status!=='In use' ? `<span class="${statusPillClass(it.status)}">${escapeHtml(it.status)}</span>` : ''}${meta ? `<div class="itemmeta">${escapeHtml(meta)}</div>` : ''}${coBtn ? `<div style="margin-top:6px">${coBtn}</div>` : ''}</td>
+    tr.innerHTML = `<td><span class="itemname">${escapeHtml(it.name)}</span>${ro?'':' <button class="editbtn" data-a="rename" title="Edit details"><i class="fa-solid fa-pen"></i></button>'} <button class="editbtn" data-a="history" title="History"><i class="fa-solid fa-clock-rotate-left"></i></button>${it.status && it.status!=='In use' ? `<span class="${statusPillClass(it.status)}">${escapeHtml(it.status)}</span>` : ''}${meta ? `<div class="itemmeta">${escapeHtml(meta)}</div>` : ''}${coBtn ? `<div style="margin-top:6px">${coBtn}</div>` : ''}</td>
       <td class="qty">${it.qty}</td>
       <td class="actions">${ro?'':'<button class="qtybtn" data-a="dec"><i class="fa-solid fa-minus"></i></button> <button class="qtybtn" data-a="inc"><i class="fa-solid fa-plus"></i></button>'}</td>
       <td class="actions">${ro?'':'<button class="del" data-a="del"><i class="fa-solid fa-trash"></i> remove</button>'}</td>`;
     const h = (a, fn)=>{ const el = tr.querySelector(`[data-a=${a}]`); if(el) el.onclick = fn; };
     h('rename', ()=>openItemModal(b, it)); h('inc', ()=>bumpItem(b, it, 1)); h('dec', ()=>bumpItem(b, it, -1)); h('del', ()=>deleteItem(b, it));
-    h('checkout', ()=>openCheckoutModal(b, it)); h('checkin', ()=>checkInItem(b, it));
+    h('checkout', ()=>openCheckoutModal(b, it)); h('checkin', ()=>checkInItem(b, it)); h('history', ()=>openHistory(b, it));
     tbody.appendChild(tr);
   });
+  };
+  drawRows();
+  const fi = document.getElementById('itemFilter'); if(fi) fi.oninput = e=>{ itemFilter = e.target.value; drawRows(); };
   if(!ro){
     document.getElementById('addItemBtn').onclick = ()=>{
       const nameEl = content.querySelector('input[name=iname]');
@@ -1032,7 +1240,7 @@ function renderAudit(){
     <table class="audittable">
       <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
       <tbody>
-        ${rows.map(e=>`<tr><td class="ts">${escapeHtml(fmtTs(e.ts))}</td><td class="user">${escapeHtml(e.app_user)}</td><td class="action">${escapeHtml(e.action)}</td><td>${escapeHtml(e.details)}</td></tr>`).join('')}
+        ${rows.map(e=>`<tr><td class="ts">${escapeHtml(fmtTs(e.ts))}</td><td class="user">${escapeHtml(e.app_user)}</td><td class="action">${escapeHtml(e.action)}</td><td>${escapeHtml(cleanDetails(e.details))}</td></tr>`).join('')}
       </tbody>
     </table>`}
   `;
@@ -1221,7 +1429,7 @@ async function exportExcel(){
     const wb = XLSX.utils.book_new();
     const n = addInventorySheets(wb, state.branches);
     const { data } = await sb.from('audit_log').select('*').order('ts', { ascending:false }).limit(1000);
-    const audit = (data||[]).map(e=>({ Time:fmtTs(e.ts), User:e.app_user, Action:e.action, Details:e.details }));
+    const audit = (data||[]).map(e=>({ Time:fmtTs(e.ts), User:e.app_user, Action:e.action, Details:cleanDetails(e.details) }));
     XLSX.utils.book_append_sheet(wb, makeSheet(audit, ['Time','User','Action','Details'], [22,28,16,70]), 'Audit Log (last 1000)');
     XLSX.writeFile(wb, `ICT-Inventory-Backup-${stamp}.xlsx`);
     await logAudit('export', `Exported inventory to Excel (${n} item rows)`);
@@ -1427,6 +1635,8 @@ async function deleteBackup(id){
 }
 
 document.getElementById('tabBackups').onclick = ()=>{ view='backups'; setTabs(); renderBranchList(); refreshBackups(); };
+document.getElementById('tabTrash').onclick = ()=>{ view='trash'; trashRows = null; setTabs(); renderBranchList(); renderTrash(); refreshTrash(); };
+document.querySelectorAll('#bottomNav button').forEach(bt=>{ bt.onclick = ()=>{ const t = document.getElementById(bt.dataset.go); if(t) t.click(); }; });
 
 /* ---------- Reports ---------- */
 const RP_TYPES = [['summary','Inventory summary'],['status','Assets by status'],['assigned','Assigned to'],['loans','Loans'],['activity','Activity'],['quality','Data quality']];
@@ -1567,7 +1777,7 @@ function rpActivityReport(){
   const byUser = Object.keys(users).sort((a,b)=>users[b].n-users[a].n).map(u=>[u, users[u].n, fmtTs(users[u].last)]);
   const byAction = Object.keys(actions).sort((a,b)=>actions[b]-actions[a]).map(a=>[a, actions[a]]);
   const dels = rows.filter(e=>/^delete/.test(e.action||''));
-  const toRow = e=>[fmtTs(e.ts), e.app_user||'', e.action||'', e.details||''];
+  const toRow = e=>[fmtTs(e.ts), e.app_user||'', e.action||'', cleanDetails(e.details)];
   return {
     title:'Activity', sub:'Period: '+rpRangeLabel()+(rpHideSess?' · log in/out hidden':''),
     cards:[{n:rows.length,l:'Actions',accent:true},{n:byUser.length,l:'Active users'},{n:rows.filter(e=>e.action==='checkout').length,l:'Check-outs'},{n:dels.length,l:'Deletions'}],
@@ -1851,7 +2061,7 @@ async function boot(){
   render();
   await loadAllData();
   await refreshAudit();
-  if(isAdmin()) autoSnapshot();
+  if(isAdmin()){ autoSnapshot(); purgeOldTrash(); }
   if(!subscribed){
     sb.channel('inventory-realtime')
       .on('postgres_changes', { event:'*', schema:'public', table:'items' }, scheduleReload)
